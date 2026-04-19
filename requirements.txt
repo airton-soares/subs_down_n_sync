@@ -1,0 +1,2 @@
+subliminal>=2.2
+ffsubsync>=0.4.25
