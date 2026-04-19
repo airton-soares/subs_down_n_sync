@@ -3,6 +3,31 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
+
+VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".webm"}
+
+
+class SubsDownError(Exception):
+    """Erro base do script — mensagem é o que vai para o usuário."""
+
+
+class InvalidVideoError(SubsDownError):
+    pass
+
+
+def validate_video_path(raw: str) -> Path:
+    p = Path(raw).expanduser()
+    if not p.exists():
+        raise InvalidVideoError(f"Arquivo de vídeo não existe: {p}")
+    if not p.is_file():
+        raise InvalidVideoError(f"Caminho não é um arquivo: {p}")
+    if p.suffix.lower() not in VIDEO_EXTENSIONS:
+        raise InvalidVideoError(
+            f"Extensão não suportada ({p.suffix}). "
+            f"Esperado um destes: {', '.join(sorted(VIDEO_EXTENSIONS))}"
+        )
+    return p
 
 
 def build_parser() -> argparse.ArgumentParser:
