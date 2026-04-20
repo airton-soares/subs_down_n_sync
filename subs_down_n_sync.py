@@ -5,7 +5,11 @@ import argparse
 import os
 import shutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+
+import subliminal
+from babelfish import Language
 
 VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".webm"}
 
@@ -24,6 +28,20 @@ class MissingDependencyError(SubsDownError):
 
 class MissingCredentialsError(SubsDownError):
     pass
+
+
+class InvalidLanguageError(SubsDownError):
+    pass
+
+
+class SubtitleNotFoundError(SubsDownError):
+    pass
+
+
+@dataclass(frozen=True)
+class SubtitleInfo:
+    provider: str
+    match_type: str  # "hash" | "release" | "fallback"
 
 
 def check_ffmpeg() -> None:
@@ -64,6 +82,69 @@ def validate_video_path(raw: str) -> Path:
             f"Esperado um destes: {', '.join(sorted(VIDEO_EXTENSIONS))}"
         )
     return p
+
+
+def parse_language(raw: str) -> Language:
+    try:
+        return Language.fromietf(raw)
+    except Exception as e:
+        raise InvalidLanguageError(
+            f"Código de idioma inválido: {raw!r}. "
+            f"Use tags BCP 47 como 'pt-BR', 'en', 'es', 'ja'."
+        ) from e
+
+
+def _classify_match(matches: set[str]) -> str:
+    if "hash" in matches:
+        return "hash"
+    if "release_group" in matches:
+        return "release"
+    return "fallback"
+
+
+def find_and_download_subtitle(
+    video_path: Path,
+    language: Language,
+    credentials: tuple[str, str],
+) -> tuple[Path, SubtitleInfo]:
+    user, pwd = credentials
+    video = subliminal.scan_video(str(video_path))
+    provider_configs = {
+        "opensubtitles": {"username": user, "password": pwd},
+    }
+    results = subliminal.download_best_subtitles(
+        {video},
+        {language},
+        providers=["opensubtitles"],
+        provider_configs=provider_configs,
+    )
+    subs = results.get(video, [])
+    if not subs:
+        raise SubtitleNotFoundError(
+            f"Nenhuma legenda em {language.alpha3} encontrada para: {video_path.name}"
+        )
+    subtitle = subs[0]
+    saved = subliminal.save_subtitles(video, [subtitle], directory=str(video_path.parent))
+    if not saved:
+        raise SubtitleNotFoundError(
+            f"subliminal não conseguiu salvar a legenda para: {video_path.name}"
+        )
+    # subliminal.save_subtitles grava como <nome>.<lang>.srt; localizamos o arquivo.
+    candidates = sorted(
+        video_path.parent.glob(f"{video_path.stem}*.srt"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if not candidates:
+        raise SubtitleNotFoundError(
+            f"Arquivo .srt não apareceu no diretório após download: {video_path.parent}"
+        )
+    srt_path = candidates[0]
+    info = SubtitleInfo(
+        provider=subtitle.provider_name,
+        match_type=_classify_match(set(subtitle.matches or [])),
+    )
+    return srt_path, info
 
 
 def build_parser() -> argparse.ArgumentParser:
