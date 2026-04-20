@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
@@ -14,6 +15,18 @@ class SubsDownError(Exception):
 
 class InvalidVideoError(SubsDownError):
     pass
+
+
+class MissingDependencyError(SubsDownError):
+    pass
+
+
+def check_ffmpeg() -> None:
+    if shutil.which("ffmpeg") is None:
+        raise MissingDependencyError(
+            "ffmpeg não encontrado no PATH. Instale via gerenciador de pacotes "
+            "(ex.: sudo apt install ffmpeg, brew install ffmpeg)."
+        )
 
 
 def validate_video_path(raw: str) -> Path:
