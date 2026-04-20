@@ -11,31 +11,16 @@ from pathlib import Path
 import subliminal
 from babelfish import Language
 
+from exceptions import (
+    InvalidLanguageError,
+    InvalidVideoError,
+    MissingCredentialsError,
+    MissingDependencyError,
+    SubsDownError,
+    SubtitleNotFoundError,
+)
+
 VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".webm"}
-
-
-class SubsDownError(Exception):
-    """Erro base do script — mensagem é o que vai para o usuário."""
-
-
-class InvalidVideoError(SubsDownError):
-    pass
-
-
-class MissingDependencyError(SubsDownError):
-    pass
-
-
-class MissingCredentialsError(SubsDownError):
-    pass
-
-
-class InvalidLanguageError(SubsDownError):
-    pass
-
-
-class SubtitleNotFoundError(SubsDownError):
-    pass
 
 
 @dataclass(frozen=True)

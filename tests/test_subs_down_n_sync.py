@@ -2,13 +2,15 @@ from pathlib import Path
 
 import pytest
 from babelfish import Language
-from subs_down_n_sync import (
+from exceptions import (
     InvalidLanguageError,
     InvalidVideoError,
     MissingCredentialsError,
     MissingDependencyError,
-    SubtitleInfo,
     SubtitleNotFoundError,
+)
+from subs_down_n_sync import (
+    SubtitleInfo,
     check_ffmpeg,
     find_and_download_subtitle,
     load_credentials,
