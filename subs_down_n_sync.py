@@ -1,4 +1,4 @@
-"""subs_down_n_sync: busca e sincroniza legendas pt-BR."""
+"""subs_down_n_sync: busca e sincroniza legendas (pt-BR por padrão, qualquer BCP 47)."""
 from __future__ import annotations
 
 import argparse
@@ -33,7 +33,7 @@ def validate_video_path(raw: str) -> Path:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="subs_down_n_sync",
-        description="Busca e sincroniza legenda pt-BR para um arquivo de vídeo.",
+        description="Busca e sincroniza legenda para um arquivo de vídeo.",
     )
     parser.add_argument("video", help="Caminho para o arquivo de vídeo.")
     return parser
