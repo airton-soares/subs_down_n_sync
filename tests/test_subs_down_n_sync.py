@@ -3,8 +3,10 @@ from pathlib import Path
 import pytest
 from subs_down_n_sync import (
     InvalidVideoError,
+    MissingCredentialsError,
     MissingDependencyError,
     check_ffmpeg,
+    load_credentials,
     main,
     validate_video_path,
 )
@@ -50,3 +52,25 @@ def test_check_ffmpeg_raises_when_binary_missing(mocker):
     mocker.patch("shutil.which", return_value=None)
     with pytest.raises(MissingDependencyError, match="ffmpeg"):
         check_ffmpeg()
+
+
+def test_load_credentials_returns_tuple_when_both_set(monkeypatch):
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "joao")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "senha123")
+    assert load_credentials() == ("joao", "senha123")
+
+
+def test_load_credentials_raises_when_username_missing(monkeypatch):
+    monkeypatch.delenv("OPENSUBTITLES_USERNAME", raising=False)
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "x")
+    with pytest.raises(MissingCredentialsError, match="OPENSUBTITLES_USERNAME"):
+        load_credentials()
+
+
+def test_load_credentials_raises_when_both_missing(monkeypatch):
+    monkeypatch.delenv("OPENSUBTITLES_USERNAME", raising=False)
+    monkeypatch.delenv("OPENSUBTITLES_PASSWORD", raising=False)
+    with pytest.raises(MissingCredentialsError) as exc:
+        load_credentials()
+    assert "OPENSUBTITLES_USERNAME" in str(exc.value)
+    assert "OPENSUBTITLES_PASSWORD" in str(exc.value)

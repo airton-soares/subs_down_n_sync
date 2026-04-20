@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -21,12 +22,34 @@ class MissingDependencyError(SubsDownError):
     pass
 
 
+class MissingCredentialsError(SubsDownError):
+    pass
+
+
 def check_ffmpeg() -> None:
     if shutil.which("ffmpeg") is None:
         raise MissingDependencyError(
             "ffmpeg não encontrado no PATH. Instale via gerenciador de pacotes "
             "(ex.: sudo apt install ffmpeg, brew install ffmpeg)."
         )
+
+
+def load_credentials() -> tuple[str, str]:
+    user = os.environ.get("OPENSUBTITLES_USERNAME")
+    pwd = os.environ.get("OPENSUBTITLES_PASSWORD")
+    missing = [
+        name
+        for name, val in (
+            ("OPENSUBTITLES_USERNAME", user),
+            ("OPENSUBTITLES_PASSWORD", pwd),
+        )
+        if not val
+    ]
+    if missing:
+        raise MissingCredentialsError(
+            "Variáveis de ambiente obrigatórias faltando: " + ", ".join(missing)
+        )
+    return user, pwd  # type: ignore[return-value]
 
 
 def validate_video_path(raw: str) -> Path:
