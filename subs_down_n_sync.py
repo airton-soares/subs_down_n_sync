@@ -114,17 +114,13 @@ def find_and_download_subtitle(
         raise SubtitleNotFoundError(
             f"subliminal não conseguiu salvar a legenda para: {video_path.name}"
         )
-    # subliminal.save_subtitles grava como <nome>.<lang>.srt; localizamos o arquivo.
-    candidates = sorted(
-        video_path.parent.glob(f"{video_path.stem}*.srt"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    if not candidates:
+    # subliminal calcula o nome via subtitle.get_path e depois joga no directory,
+    # então o caminho final é determinístico: parent / basename(get_path).
+    srt_path = video_path.parent / Path(saved[0].get_path(video)).name
+    if not srt_path.exists():
         raise SubtitleNotFoundError(
-            f"Arquivo .srt não apareceu no diretório após download: {video_path.parent}"
+            f"Arquivo .srt não apareceu após download: {srt_path}"
         )
-    srt_path = candidates[0]
     info = SubtitleInfo(
         provider=subtitle.provider_name,
         match_type=_classify_match(set(subtitle.matches or [])),
