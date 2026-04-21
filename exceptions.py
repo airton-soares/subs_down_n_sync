@@ -24,3 +24,7 @@ class InvalidLanguageError(SubsDownError):
 
 class SubtitleNotFoundError(SubsDownError):
     pass
+
+
+class SubtitleSyncError(SubsDownError):
+    pass

@@ -1,3 +1,4 @@
+import shutil as shutil_
 from pathlib import Path
 
 import pytest
@@ -8,16 +9,23 @@ from exceptions import (
     MissingCredentialsError,
     MissingDependencyError,
     SubtitleNotFoundError,
+    SubtitleSyncError,
 )
 from subs_down_n_sync import (
     SubtitleInfo,
+    SyncResult,
+    _mean_offset_seconds,
+    _parse_srt_timestamps,
     check_ffmpeg,
     find_and_download_subtitle,
     load_credentials,
     main,
     parse_language,
+    sync_subtitle_if_needed,
     validate_video_path,
 )
+
+FIXTURE = Path(__file__).parent / "fixtures" / "mini.srt"
 
 
 def test_main_with_no_args_exits_with_code_2(capsys):
@@ -193,3 +201,83 @@ def test_match_type_is_fallback_when_only_title_match(tmp_path, stub_subliminal)
         credentials=("u", "p"),
     )
     assert info.match_type == "fallback"
+
+
+def test_parse_srt_timestamps_extracts_start_times():
+    starts = _parse_srt_timestamps(FIXTURE.read_text())
+    assert starts == [1.0, 5.0]
+
+
+def test_mean_offset_seconds_is_zero_when_equal():
+    assert _mean_offset_seconds([1.0, 5.0], [1.0, 5.0]) == 0.0
+
+
+def test_mean_offset_seconds_returns_uniform_shift():
+    assert _mean_offset_seconds([1.0, 5.0], [1.5, 5.5]) == pytest.approx(0.5)
+
+
+def test_mean_offset_seconds_uses_min_length_when_sizes_differ():
+    assert _mean_offset_seconds([1.0, 5.0, 10.0], [1.5, 5.5]) == pytest.approx(0.5)
+
+
+def test_sync_skips_replacement_when_offset_below_threshold(tmp_path, mocker):
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    srt = tmp_path / "Filme.pt-BR.srt"
+    shutil_.copy(FIXTURE, srt)
+
+    def fake_run(cmd, capture_output, text, check):  # noqa: ARG001
+        out = Path([a for a in cmd if a.endswith(".sync.srt")][0])
+        out.write_text(
+            "1\n00:00:01,050 --> 00:00:02,050\nlinha 1\n\n"
+            "2\n00:00:05,050 --> 00:00:06,050\nlinha 2\n"
+        )
+        return mocker.MagicMock(returncode=0, stdout="", stderr="")
+
+    mocker.patch("subprocess.run", side_effect=fake_run)
+
+    result = sync_subtitle_if_needed(video, srt)
+    assert result == SyncResult(synced=False, offset_seconds=pytest.approx(0.05))
+    assert srt.read_text() == FIXTURE.read_text()
+
+
+def test_sync_replaces_original_when_offset_above_threshold(tmp_path, mocker):
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    srt = tmp_path / "Filme.pt-BR.srt"
+    shutil_.copy(FIXTURE, srt)
+
+    synced_text = (
+        "1\n00:00:03,000 --> 00:00:04,000\nlinha 1\n\n"
+        "2\n00:00:07,000 --> 00:00:08,000\nlinha 2\n"
+    )
+
+    def fake_run(cmd, capture_output, text, check):  # noqa: ARG001
+        out = Path([a for a in cmd if a.endswith(".sync.srt")][0])
+        out.write_text(synced_text)
+        return mocker.MagicMock(returncode=0, stdout="", stderr="")
+
+    mocker.patch("subprocess.run", side_effect=fake_run)
+
+    result = sync_subtitle_if_needed(video, srt)
+    assert result.synced is True
+    assert result.offset_seconds == pytest.approx(2.0)
+    assert srt.read_text() == synced_text
+
+
+def test_sync_raises_when_ffsubsync_fails(tmp_path, mocker):
+    import subprocess
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    srt = tmp_path / "Filme.pt-BR.srt"
+    shutil_.copy(FIXTURE, srt)
+
+    mocker.patch(
+        "subprocess.run",
+        side_effect=subprocess.CalledProcessError(1, "ffsubsync", stderr="boom"),
+    )
+
+    with pytest.raises(SubtitleSyncError, match="ffsubsync"):
+        sync_subtitle_if_needed(video, srt)
+    assert srt.read_text() == FIXTURE.read_text()
