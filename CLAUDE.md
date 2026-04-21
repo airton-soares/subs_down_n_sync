@@ -8,7 +8,12 @@ docs/superpowers/specs/2026-04-19-subs_down_n_sync-design.md
 
 ## Status
 
-Spec aprovada e plano de implementação escrito. Próximo passo: executar o plano.
+Implementação concluída. Testado via `pytest`. Para rodar:
+
+```bash
+source .venv/bin/activate
+python subs_down_n_sync.py /caminho/para/video.mkv
+```
 
 ## Plano de Implementação
 
