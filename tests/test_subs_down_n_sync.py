@@ -18,6 +18,7 @@ from subs_down_n_sync import (
     _parse_srt_timestamps,
     check_ffmpeg,
     find_and_download_subtitle,
+    finalize_output_path,
     load_credentials,
     main,
     parse_language,
@@ -281,3 +282,52 @@ def test_sync_raises_when_ffsubsync_fails(tmp_path, mocker):
     with pytest.raises(SubtitleSyncError, match="ffsubsync"):
         sync_subtitle_if_needed(video, srt)
     assert srt.read_text() == FIXTURE.read_text()
+
+
+def test_finalize_output_path_renames_with_language_tag(tmp_path):
+    video = tmp_path / "Filme.2024.mkv"
+    srt = tmp_path / "Filme.2024.pt-BR.srt"
+    srt.write_text("conteudo")
+
+    result = finalize_output_path(video, srt, "pt-BR")
+
+    assert result == tmp_path / "Filme.2024.pt-BR.srt"
+    assert result.exists()
+    assert result.read_text() == "conteudo"
+
+
+def test_finalize_output_path_overwrites_existing(tmp_path):
+    video = tmp_path / "Filme.mkv"
+    existing = tmp_path / "Filme.en.srt"
+    existing.write_text("velho")
+    source = tmp_path / "Filme.eng.srt"
+    source.write_text("novo")
+
+    result = finalize_output_path(video, source, "en")
+
+    assert result == tmp_path / "Filme.en.srt"
+    assert result.read_text() == "novo"
+
+
+def test_finalize_output_path_is_noop_when_already_canonical(tmp_path):
+    video = tmp_path / "Filme.mkv"
+    srt = tmp_path / "Filme.pt-BR.srt"
+    srt.write_text("x")
+
+    result = finalize_output_path(video, srt, "pt-BR")
+
+    assert result == srt
+    assert result.read_text() == "x"
+
+
+def test_finalize_output_path_handles_different_lang_from_saved_name(tmp_path):
+    """subliminal pode salvar como Filme.pob.srt; queremos Filme.pt-BR.srt."""
+    video = tmp_path / "Filme.mkv"
+    srt = tmp_path / "Filme.pob.srt"
+    srt.write_text("conteudo")
+
+    result = finalize_output_path(video, srt, "pt-BR")
+
+    assert result == tmp_path / "Filme.pt-BR.srt"
+    assert result.read_text() == "conteudo"
+    assert not srt.exists()

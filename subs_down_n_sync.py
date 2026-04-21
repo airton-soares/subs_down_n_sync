@@ -218,6 +218,17 @@ def sync_subtitle_if_needed(video_path: Path, srt_path: Path) -> SyncResult:
     return SyncResult(synced=True, offset_seconds=offset)
 
 
+def finalize_output_path(video_path: Path, srt_path: Path, lang_tag: str) -> Path:
+    target = video_path.with_suffix(f".{lang_tag}.srt")
+
+    if srt_path == target:
+        return target
+
+    srt_path.replace(target)
+
+    return target
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="subs_down_n_sync",
