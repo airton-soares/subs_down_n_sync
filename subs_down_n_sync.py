@@ -106,7 +106,7 @@ def _classify_match(matches: set[str]) -> str:
         return "hash"
     if "release_group" in matches:
         return "release"
-    
+
     return "fallback"
 
 
@@ -128,7 +128,7 @@ def find_and_download_subtitle(
         provider_configs=provider_configs,
     )
     subs = results.get(video, [])
-    
+
     if not subs:
         raise SubtitleNotFoundError(
             f"Nenhuma legenda em {language.alpha3} encontrada para: {video_path.name}"
@@ -136,7 +136,7 @@ def find_and_download_subtitle(
 
     subtitle = subs[0]
     saved = subliminal.save_subtitles(video, [subtitle], directory=str(video_path.parent))
-    
+
     if not saved:
         raise SubtitleNotFoundError(
             f"subliminal não conseguiu salvar a legenda para: {video_path.name}"
@@ -145,7 +145,7 @@ def find_and_download_subtitle(
     # subliminal calcula o nome via subtitle.get_path e depois joga no directory,
     # então o caminho final é determinístico: parent / basename(get_path).
     srt_path = video_path.parent / Path(saved[0].get_path(video)).name
-    
+
     if not srt_path.exists():
         raise SubtitleNotFoundError(
             f"Arquivo .srt não apareceu após download: {srt_path}"
@@ -213,7 +213,6 @@ def sync_subtitle_if_needed(video_path: Path, srt_path: Path) -> SyncResult:
 
         return SyncResult(synced=False, offset_seconds=offset)
 
-    # Substitui o original pela versão sincronizada.
     synced_path.replace(srt_path)
 
     return SyncResult(synced=True, offset_seconds=offset)
