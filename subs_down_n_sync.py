@@ -40,6 +40,7 @@ def check_ffmpeg() -> None:
 def load_credentials() -> tuple[str, str]:
     user = os.environ.get("OPENSUBTITLES_USERNAME")
     pwd = os.environ.get("OPENSUBTITLES_PASSWORD")
+
     missing = [
         name
         for name, val in (
@@ -52,11 +53,13 @@ def load_credentials() -> tuple[str, str]:
         raise MissingCredentialsError(
             "Variáveis de ambiente obrigatórias faltando: " + ", ".join(missing)
         )
+
     return user, pwd  # type: ignore[return-value]
 
 
 def validate_video_path(raw: str) -> Path:
     p = Path(raw).expanduser()
+
     if not p.exists():
         raise InvalidVideoError(f"Arquivo de vídeo não existe: {p}")
     if not p.is_file():
@@ -66,6 +69,7 @@ def validate_video_path(raw: str) -> Path:
             f"Extensão não suportada ({p.suffix}). "
             f"Esperado um destes: {', '.join(sorted(VIDEO_EXTENSIONS))}"
         )
+
     return p
 
 
@@ -97,6 +101,7 @@ def find_and_download_subtitle(
     provider_configs = {
         "opensubtitles": {"username": user, "password": pwd},
     }
+
     results = subliminal.download_best_subtitles(
         {video},
         {language},
@@ -108,12 +113,14 @@ def find_and_download_subtitle(
         raise SubtitleNotFoundError(
             f"Nenhuma legenda em {language.alpha3} encontrada para: {video_path.name}"
         )
+
     subtitle = subs[0]
     saved = subliminal.save_subtitles(video, [subtitle], directory=str(video_path.parent))
     if not saved:
         raise SubtitleNotFoundError(
             f"subliminal não conseguiu salvar a legenda para: {video_path.name}"
         )
+
     # subliminal calcula o nome via subtitle.get_path e depois joga no directory,
     # então o caminho final é determinístico: parent / basename(get_path).
     srt_path = video_path.parent / Path(saved[0].get_path(video)).name
@@ -121,10 +128,12 @@ def find_and_download_subtitle(
         raise SubtitleNotFoundError(
             f"Arquivo .srt não apareceu após download: {srt_path}"
         )
+
     info = SubtitleInfo(
         provider=subtitle.provider_name,
         match_type=_classify_match(set(subtitle.matches or [])),
     )
+
     return srt_path, info
 
 
@@ -134,14 +143,17 @@ def build_parser() -> argparse.ArgumentParser:
         description="Busca e sincroniza legenda para um arquivo de vídeo.",
     )
     parser.add_argument("video", help="Caminho para o arquivo de vídeo.")
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
     # A lógica real virá nas próximas tasks.
     print(f"video: {args.video}")
+
     return 0
 
 
