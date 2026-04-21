@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,6 +25,8 @@ from exceptions import (
 )
 
 VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".webm"}
+
+DEFAULT_LANG = "pt-BR"
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,18 @@ _TS_RE = re.compile(
 class SyncResult:
     synced: bool
     offset_seconds: float
+
+
+@dataclass(frozen=True)
+class RunSummary:
+    output_path: Path
+    provider: str
+    match_type: str
+    synced: bool
+    offset_seconds: float
+    sync_error: str | None
+    elapsed_seconds: float
+    lang_tag: str
 
 
 def check_ffmpeg() -> None:
@@ -229,12 +244,68 @@ def finalize_output_path(video_path: Path, srt_path: Path, lang_tag: str) -> Pat
     return target
 
 
+def run(video_arg: str, lang_tag: str = DEFAULT_LANG) -> RunSummary:
+    start = time.monotonic()
+
+    check_ffmpeg()
+    video_path = validate_video_path(video_arg)
+    language = parse_language(lang_tag)
+    credentials = load_credentials()
+
+    srt_path, info = find_and_download_subtitle(
+        video_path, language=language, credentials=credentials
+    )
+
+    sync_error: str | None = None
+    try:
+        sync_result = sync_subtitle_if_needed(video_path, srt_path)
+    except SubtitleSyncError as e:
+        sync_error = str(e)
+        sync_result = SyncResult(synced=False, offset_seconds=0.0)
+
+    final_path = finalize_output_path(video_path, srt_path, lang_tag=lang_tag)
+    elapsed = time.monotonic() - start
+
+    return RunSummary(
+        output_path=final_path,
+        provider=info.provider,
+        match_type=info.match_type,
+        synced=sync_result.synced,
+        offset_seconds=sync_result.offset_seconds,
+        sync_error=sync_error,
+        elapsed_seconds=elapsed,
+        lang_tag=lang_tag,
+    )
+
+
+def _print_summary(summary: RunSummary) -> None:
+    print(f"Legenda ({summary.lang_tag}): {summary.provider} (match: {summary.match_type})")
+
+    if summary.sync_error:
+        print(
+            f"Aviso: sincronização falhou — mantendo legenda original. "
+            f"Detalhe: {summary.sync_error}"
+        )
+    elif summary.synced:
+        print(f"Sincronizada (ajuste médio: {summary.offset_seconds:.2f}s)")
+    else:
+        print(f"Já sincronizada (offset médio: {summary.offset_seconds:.2f}s < 0.10s)")
+
+    print(f"Arquivo: {summary.output_path}")
+    print(f"Tempo total: {summary.elapsed_seconds:.2f}s")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="subs_down_n_sync",
         description="Busca e sincroniza legenda para um arquivo de vídeo.",
     )
     parser.add_argument("video", help="Caminho para o arquivo de vídeo.")
+    parser.add_argument(
+        "-l", "--lang",
+        default=DEFAULT_LANG,
+        help=f"Código de idioma BCP 47 (ex: pt-BR, en, es). Default: {DEFAULT_LANG}.",
+    )
 
     return parser
 
@@ -243,8 +314,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # A lógica real virá nas próximas tasks.
-    print(f"video: {args.video}")
+    try:
+        summary = run(args.video, lang_tag=args.lang)
+    except SubsDownError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+
+    _print_summary(summary)
 
     return 0
 

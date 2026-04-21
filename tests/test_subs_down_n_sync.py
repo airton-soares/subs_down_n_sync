@@ -12,6 +12,7 @@ from exceptions import (
     SubtitleSyncError,
 )
 from subs_down_n_sync import (
+    RunSummary,
     SubtitleInfo,
     SyncResult,
     _mean_offset_seconds,
@@ -22,6 +23,7 @@ from subs_down_n_sync import (
     load_credentials,
     main,
     parse_language,
+    run,
     sync_subtitle_if_needed,
     validate_video_path,
 )
@@ -331,3 +333,127 @@ def test_finalize_output_path_handles_different_lang_from_saved_name(tmp_path):
     assert result == tmp_path / "Filme.pt-BR.srt"
     assert result.read_text() == "conteudo"
     assert not srt.exists()
+
+
+def test_run_full_pipeline_when_sync_needed(tmp_path, monkeypatch, mocker):
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+
+    downloaded_path = tmp_path / "Filme.pt-BR.srt"
+
+    def fake_find(video_path, language, credentials):
+        downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+        return downloaded_path, SubtitleInfo(provider="opensubtitles", match_type="hash")
+
+    mocker.patch("subs_down_n_sync.find_and_download_subtitle", side_effect=fake_find)
+    mocker.patch(
+        "subs_down_n_sync.sync_subtitle_if_needed",
+        return_value=SyncResult(synced=True, offset_seconds=1.25),
+    )
+
+    summary = run(str(video), lang_tag="pt-BR")
+
+    assert summary.output_path == tmp_path / "Filme.pt-BR.srt"
+    assert summary.output_path.exists()
+    assert summary.provider == "opensubtitles"
+    assert summary.match_type == "hash"
+    assert summary.synced is True
+    assert summary.offset_seconds == pytest.approx(1.25)
+    assert summary.lang_tag == "pt-BR"
+
+
+def test_run_keeps_subtitle_when_ffsubsync_fails(tmp_path, monkeypatch, mocker):
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+
+    downloaded_path = tmp_path / "Filme.en.srt"
+
+    def fake_find(video_path, language, credentials):
+        downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\nhi\n")
+        return downloaded_path, SubtitleInfo(provider="opensubtitles", match_type="hash")
+
+    mocker.patch("subs_down_n_sync.find_and_download_subtitle", side_effect=fake_find)
+    mocker.patch(
+        "subs_down_n_sync.sync_subtitle_if_needed",
+        side_effect=SubtitleSyncError("boom"),
+    )
+
+    summary = run(str(video), lang_tag="en")
+
+    assert summary.output_path == tmp_path / "Filme.en.srt"
+    assert summary.output_path.exists()
+    assert summary.synced is False
+    assert summary.sync_error == "boom"
+
+
+def test_main_success_prints_summary(tmp_path, monkeypatch, mocker, capsys):
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+
+    fake_summary = RunSummary(
+        output_path=tmp_path / "Filme.pt-BR.srt",
+        provider="opensubtitles",
+        match_type="hash",
+        synced=True,
+        offset_seconds=0.42,
+        sync_error=None,
+        elapsed_seconds=1.23,
+        lang_tag="pt-BR",
+    )
+    mocker.patch("subs_down_n_sync.run", return_value=fake_summary)
+
+    code = main([str(video)])
+
+    assert code == 0
+    captured = capsys.readouterr()
+    assert "opensubtitles" in captured.out
+    assert "hash" in captured.out
+    assert "0.42" in captured.out or "0,42" in captured.out
+    assert "Filme.pt-BR.srt" in captured.out
+
+
+def test_main_lang_flag_uses_custom_language(tmp_path, monkeypatch, mocker):
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+
+    fake_summary = RunSummary(
+        output_path=tmp_path / "Filme.en.srt",
+        provider="opensubtitles",
+        match_type="hash",
+        synced=False,
+        offset_seconds=0.0,
+        sync_error=None,
+        elapsed_seconds=0.5,
+        lang_tag="en",
+    )
+    mock_run = mocker.patch("subs_down_n_sync.run", return_value=fake_summary)
+
+    code = main([str(video), "--lang", "en"])
+
+    assert code == 0
+    called_kwargs = mock_run.call_args
+    assert called_kwargs.kwargs.get("lang_tag") == "en" or called_kwargs.args[1] == "en"
+
+
+def test_main_expected_error_returns_1(tmp_path, capsys):
+    code = main([str(tmp_path / "naoexiste.mkv")])
+
+    assert code == 1
+    captured = capsys.readouterr()
+    assert "não existe" in captured.err
