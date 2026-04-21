@@ -420,7 +420,7 @@ def test_main_success_prints_summary(tmp_path, monkeypatch, mocker, capsys):
     captured = capsys.readouterr()
     assert "opensubtitles" in captured.out
     assert "hash" in captured.out
-    assert "0.42" in captured.out or "0,42" in captured.out
+    assert "0.42" in captured.out
     assert "Filme.pt-BR.srt" in captured.out
 
 
@@ -447,8 +447,7 @@ def test_main_lang_flag_uses_custom_language(tmp_path, monkeypatch, mocker):
     code = main([str(video), "--lang", "en"])
 
     assert code == 0
-    called_kwargs = mock_run.call_args
-    assert called_kwargs.kwargs.get("lang_tag") == "en" or called_kwargs.args[1] == "en"
+    assert mock_run.call_args.kwargs["lang_tag"] == "en"
 
 
 def test_main_expected_error_returns_1(tmp_path, capsys):
