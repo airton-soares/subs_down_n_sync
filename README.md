@@ -1,5 +1,7 @@
 # subs_down_n_sync
 
+![CI](https://github.com/airton-soares/subs_down_n_sync/actions/workflows/ci.yml/badge.svg)
+
 CLI Python para baixar e sincronizar legendas para arquivos de vídeo. Idioma padrão: **pt-BR**, configurável via flag.
 
 ## Setup
@@ -43,6 +45,27 @@ Saída: `/caminho/para/filme.<lang>.srt` (ex.: `filme.pt-BR.srt`, `filme.en.srt`
 pip install -r requirements-dev.txt
 pytest
 ```
+
+Os testes unitários rodam com gate de cobertura de 90% (configurado em `pytest.ini`). O CI falha se a cobertura cair abaixo disso.
+
+Para rodar sem o gate (útil ao explorar com `-k` ou `--collect-only`):
+
+```bash
+pytest --no-cov
+```
+
+## Lint e formatação
+
+O projeto usa [Ruff](https://docs.astral.sh/ruff/) para formatação e lint.
+
+```bash
+ruff format .           # aplica formatação
+ruff format --check .   # verifica sem escrever (usado no CI)
+ruff check .            # roda lint
+ruff check --fix .      # aplica fixes automáticos
+```
+
+O CI falha se `ruff format --check` ou `ruff check` encontrarem problemas.
 
 ## Testes de integração
 

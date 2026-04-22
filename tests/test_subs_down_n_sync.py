@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from babelfish import Language
+
 from exceptions import (
     InvalidLanguageError,
     InvalidVideoError,
@@ -18,8 +19,8 @@ from subs_down_n_sync import (
     _mean_offset_seconds,
     _parse_srt_timestamps,
     check_ffmpeg,
-    find_and_download_subtitle,
     finalize_output_path,
+    find_and_download_subtitle,
     load_credentials,
     main,
     parse_language,
@@ -117,12 +118,13 @@ def test_parse_language_raises_when_invalid():
 
 
 @pytest.fixture
-def stub_subliminal(mocker, tmp_path):
-    """Stuba scan_video/download_best_subtitles/save_subtitles.
+def stub_subliminal(mocker):
+    """Stuba scan_video/download_best_subtitles.
 
-    Retorna o mock do subtitle para os testes configurarem `.matches` / `.provider_name`.
-    O fake `save_subtitles` grava um arquivo no `directory` usando o caminho retornado
-    por `subtitle.get_path`, espelhando o comportamento real do subliminal.
+    Retorna o mock do subtitle para os testes configurarem `.get_matches`,
+    `.provider_name` e `.text`. A escrita do .srt no disco fica a cargo do
+    próprio `find_and_download_subtitle` (write_text em UTF-8), então o stub
+    só precisa garantir que `subtitle.text` seja uma string válida.
     """
     fake_video = mocker.MagicMock(name="Video")
     mocker.patch("subs_down_n_sync.subliminal.scan_video", return_value=fake_video)
@@ -130,25 +132,21 @@ def stub_subliminal(mocker, tmp_path):
     fake_sub = mocker.MagicMock()
     fake_sub.provider_name = "opensubtitles"
     fake_sub.get_path.return_value = "Filme.pt-BR.srt"
+    fake_sub.text = "1\n00:00:01,000 --> 00:00:02,000\noi\n"
+    fake_sub.get_matches.return_value = set()
 
     mocker.patch(
         "subs_down_n_sync.subliminal.download_best_subtitles",
         return_value={fake_video: [fake_sub]},
     )
 
-    def fake_save(video, subs, directory=None):
-        out = Path(directory) / Path(subs[0].get_path(video)).name
-        out.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
-        return [subs[0]]
-
-    mocker.patch("subs_down_n_sync.subliminal.save_subtitles", side_effect=fake_save)
     return fake_sub
 
 
 def test_find_and_download_subtitle_returns_path_and_info(tmp_path, stub_subliminal):
     video_path = tmp_path / "Filme.2024.1080p.mkv"
     video_path.write_bytes(b"\x00" * 10)
-    stub_subliminal.matches = {"hash", "release_group"}
+    stub_subliminal.get_matches.return_value = {"hash", "release_group"}
     stub_subliminal.get_path.return_value = "Filme.2024.1080p.pt-BR.srt"
 
     srt_path, info = find_and_download_subtitle(
@@ -175,15 +173,13 @@ def test_find_and_download_subtitle_raises_when_no_results(tmp_path, mocker):
     )
 
     with pytest.raises(SubtitleNotFoundError, match="eng"):
-        find_and_download_subtitle(
-            video_path, language=Language("eng"), credentials=("u", "p")
-        )
+        find_and_download_subtitle(video_path, language=Language("eng"), credentials=("u", "p"))
 
 
 def test_match_type_is_release_when_no_hash(tmp_path, stub_subliminal):
     video_path = tmp_path / "Filme.mkv"
     video_path.write_bytes(b"\x00" * 10)
-    stub_subliminal.matches = {"release_group", "resolution"}
+    stub_subliminal.get_matches.return_value = {"release_group", "resolution"}
 
     _, info = find_and_download_subtitle(
         video_path,
@@ -196,7 +192,7 @@ def test_match_type_is_release_when_no_hash(tmp_path, stub_subliminal):
 def test_match_type_is_fallback_when_only_title_match(tmp_path, stub_subliminal):
     video_path = tmp_path / "Filme.mkv"
     video_path.write_bytes(b"\x00" * 10)
-    stub_subliminal.matches = {"title"}
+    stub_subliminal.get_matches.return_value = {"title"}
 
     _, info = find_and_download_subtitle(
         video_path,
@@ -204,6 +200,28 @@ def test_match_type_is_fallback_when_only_title_match(tmp_path, stub_subliminal)
         credentials=("u", "p"),
     )
     assert info.match_type == "fallback"
+
+
+def test_find_and_download_subtitle_writes_utf8(tmp_path, stub_subliminal):
+    """Regressão: subliminal.save_subtitles grava bytes no encoding detectado
+    (ex.: cp1252) em um arquivo .srt, o que confunde ffsubsync e produz mojibake.
+    O código agora pega subtitle.text (já decodificado) e escreve em UTF-8.
+    """
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+    stub_subliminal.text = "1\n00:00:01,000 --> 00:00:02,000\nVocê não está lá.\n"
+
+    srt_path, _ = find_and_download_subtitle(
+        video_path,
+        language=Language("por", country="BR"),
+        credentials=("u", "p"),
+    )
+
+    raw = srt_path.read_bytes()
+    assert raw.decode("utf-8") == stub_subliminal.text
+    # Garantir que não caiu em mojibake tipo 'VocÃª' (utf-8 de latin-1 de utf-8)
+    assert "Você" in raw.decode("utf-8")
+    assert "ę" not in raw.decode("utf-8")
 
 
 def test_parse_srt_timestamps_extracts_start_times():
@@ -251,8 +269,7 @@ def test_sync_replaces_original_when_offset_above_threshold(tmp_path, mocker):
     shutil_.copy(FIXTURE, srt)
 
     synced_text = (
-        "1\n00:00:03,000 --> 00:00:04,000\nlinha 1\n\n"
-        "2\n00:00:07,000 --> 00:00:08,000\nlinha 2\n"
+        "1\n00:00:03,000 --> 00:00:04,000\nlinha 1\n\n2\n00:00:07,000 --> 00:00:08,000\nlinha 2\n"
     )
 
     def fake_run(cmd, capture_output, text, check):  # noqa: ARG001

@@ -1,4 +1,5 @@
 """subs_down_n_sync: busca e sincroniza legendas (pt-BR por padrão, qualquer BCP 47)."""
+
 from __future__ import annotations
 
 import argparse
@@ -111,8 +112,7 @@ def parse_language(raw: str) -> Language:
         return Language.fromietf(raw)
     except Exception as e:
         raise InvalidLanguageError(
-            f"Código de idioma inválido: {raw!r}. "
-            f"Use tags BCP 47 como 'pt-BR', 'en', 'es', 'ja'."
+            f"Código de idioma inválido: {raw!r}. Use tags BCP 47 como 'pt-BR', 'en', 'es', 'ja'."
         ) from e
 
 
@@ -150,25 +150,20 @@ def find_and_download_subtitle(
         )
 
     subtitle = subs[0]
-    saved = subliminal.save_subtitles(video, [subtitle], directory=str(video_path.parent))
 
-    if not saved:
-        raise SubtitleNotFoundError(
-            f"subliminal não conseguiu salvar a legenda para: {video_path.name}"
-        )
+    # Não usamos subliminal.save_subtitles porque ele grava os bytes crus no
+    # encoding detectado (ex.: cp1252) em um arquivo UTF-8 por convenção, o que
+    # produz mojibake quando ferramentas como ffsubsync tentam re-detectar.
+    # Em vez disso, pegamos o texto já decodificado e escrevemos em UTF-8.
+    if not subtitle.text:
+        raise SubtitleNotFoundError(f"Legenda veio vazia do provider para: {video_path.name}")
 
-    # subliminal calcula o nome via subtitle.get_path e depois joga no directory,
-    # então o caminho final é determinístico: parent / basename(get_path).
-    srt_path = video_path.parent / Path(saved[0].get_path(video)).name
-
-    if not srt_path.exists():
-        raise SubtitleNotFoundError(
-            f"Arquivo .srt não apareceu após download: {srt_path}"
-        )
+    srt_path = video_path.parent / Path(subtitle.get_path(video)).name
+    srt_path.write_text(subtitle.text, encoding="utf-8")
 
     info = SubtitleInfo(
         provider=subtitle.provider_name,
-        match_type=_classify_match(set(subtitle.matches or [])),
+        match_type=_classify_match(set(subtitle.get_matches(video))),
     )
 
     return srt_path, info
@@ -246,8 +241,8 @@ def finalize_output_path(video_path: Path, srt_path: Path, lang_tag: str) -> Pat
 
 def run(video_arg: str, lang_tag: str = DEFAULT_LANG) -> RunSummary:
     start = time.monotonic()
-    check_ffmpeg()
     video_path = validate_video_path(video_arg)
+    check_ffmpeg()
     language = parse_language(lang_tag)
     credentials = load_credentials()
 
@@ -301,7 +296,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("video", help="Caminho para o arquivo de vídeo.")
     parser.add_argument(
-        "-l", "--lang",
+        "-l",
+        "--lang",
         default=DEFAULT_LANG,
         help=f"Código de idioma BCP 47 (ex: pt-BR, en, es). Default: {DEFAULT_LANG}.",
     )

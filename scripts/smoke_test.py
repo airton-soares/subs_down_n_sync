@@ -7,6 +7,7 @@ Uso:
 
 Consome cota real da API do OpenSubtitles. Não é chamado por pytest.
 """
+
 from __future__ import annotations
 
 import argparse

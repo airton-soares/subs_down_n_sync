@@ -1,4 +1,5 @@
 """Exceptions raised by subs_down_n_sync. Message is user-facing (in Portuguese)."""
+
 from __future__ import annotations
 
 
