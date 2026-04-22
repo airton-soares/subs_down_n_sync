@@ -2,14 +2,14 @@
 
 ![CI](https://github.com/airton-soares/subs_down_n_sync/actions/workflows/ci.yml/badge.svg)
 
-CLI Python para baixar e sincronizar legendas para arquivos de vídeo. Idioma padrão: **pt-BR**, configurável via flag.
+CLI Python para baixar e sincronizar legendas para arquivos de vídeo. Idioma padrão: **pt-BR**, configurável via flag `--lang` (qualquer tag BCP 47).
 
 ## Setup
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"
 ```
 
 Instale também o `ffmpeg` no sistema (usado pelo `ffsubsync`):
@@ -30,11 +30,14 @@ export OPENSUBTITLES_PASSWORD="sua_senha"
 
 ```bash
 # Default: pt-BR
-python subs_down_n_sync.py /caminho/para/filme.mkv
+subs-down-n-sync /caminho/para/filme.mkv
 
 # Outro idioma (BCP 47: 'en', 'pt-BR', 'en-US', 'es', 'ja', ...)
-python subs_down_n_sync.py /caminho/para/filme.mkv --lang en
-python subs_down_n_sync.py /caminho/para/filme.mkv -l es
+subs-down-n-sync /caminho/para/filme.mkv --lang en
+subs-down-n-sync /caminho/para/filme.mkv -l es
+
+# Ou via módulo Python
+python -m subs_down_n_sync /caminho/para/filme.mkv
 ```
 
 Saída: `/caminho/para/filme.<lang>.srt` (ex.: `filme.pt-BR.srt`, `filme.en.srt`). Isso permite manter legendas do mesmo vídeo em idiomas diferentes sem sobrescrever.
@@ -42,11 +45,11 @@ Saída: `/caminho/para/filme.<lang>.srt` (ex.: `filme.pt-BR.srt`, `filme.en.srt`
 ## Desenvolvimento
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -e ".[dev]"
 pytest
 ```
 
-Os testes unitários rodam com gate de cobertura de 90% (configurado em `pytest.ini`). O CI falha se a cobertura cair abaixo disso.
+Os testes unitários rodam com gate de cobertura de 90% (configurado em `pyproject.toml`). O CI falha se a cobertura cair abaixo disso.
 
 Para rodar sem o gate (útil ao explorar com `-k` ou `--collect-only`):
 
