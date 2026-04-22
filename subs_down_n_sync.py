@@ -150,25 +150,22 @@ def find_and_download_subtitle(
         )
 
     subtitle = subs[0]
-    saved = subliminal.save_subtitles(video, [subtitle], directory=str(video_path.parent))
 
-    if not saved:
+    # Não usamos subliminal.save_subtitles porque ele grava os bytes crus no
+    # encoding detectado (ex.: cp1252) em um arquivo UTF-8 por convenção, o que
+    # produz mojibake quando ferramentas como ffsubsync tentam re-detectar.
+    # Em vez disso, pegamos o texto já decodificado e escrevemos em UTF-8.
+    if not subtitle.text:
         raise SubtitleNotFoundError(
-            f"subliminal não conseguiu salvar a legenda para: {video_path.name}"
+            f"Legenda veio vazia do provider para: {video_path.name}"
         )
 
-    # subliminal calcula o nome via subtitle.get_path e depois joga no directory,
-    # então o caminho final é determinístico: parent / basename(get_path).
-    srt_path = video_path.parent / Path(saved[0].get_path(video)).name
-
-    if not srt_path.exists():
-        raise SubtitleNotFoundError(
-            f"Arquivo .srt não apareceu após download: {srt_path}"
-        )
+    srt_path = video_path.parent / Path(subtitle.get_path(video)).name
+    srt_path.write_text(subtitle.text, encoding="utf-8")
 
     info = SubtitleInfo(
         provider=subtitle.provider_name,
-        match_type=_classify_match(set(subtitle.matches or [])),
+        match_type=_classify_match(set(subtitle.get_matches(video))),
     )
 
     return srt_path, info
