@@ -241,8 +241,8 @@ def finalize_output_path(video_path: Path, srt_path: Path, lang_tag: str) -> Pat
 
 def run(video_arg: str, lang_tag: str = DEFAULT_LANG) -> RunSummary:
     start = time.monotonic()
-    check_ffmpeg()
     video_path = validate_video_path(video_arg)
+    check_ffmpeg()
     language = parse_language(lang_tag)
     credentials = load_credentials()
 
