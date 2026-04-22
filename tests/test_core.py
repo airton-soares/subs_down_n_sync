@@ -4,15 +4,8 @@ from pathlib import Path
 import pytest
 from babelfish import Language
 
-from exceptions import (
-    InvalidLanguageError,
-    InvalidVideoError,
-    MissingCredentialsError,
-    MissingDependencyError,
-    SubtitleNotFoundError,
-    SubtitleSyncError,
-)
-from subs_down_n_sync import (
+from subs_down_n_sync.cli import main
+from subs_down_n_sync.core import (
     RunSummary,
     SubtitleInfo,
     SyncResult,
@@ -22,11 +15,18 @@ from subs_down_n_sync import (
     finalize_output_path,
     find_and_download_subtitle,
     load_credentials,
-    main,
     parse_language,
     run,
     sync_subtitle_if_needed,
     validate_video_path,
+)
+from subs_down_n_sync.exceptions import (
+    InvalidLanguageError,
+    InvalidVideoError,
+    MissingCredentialsError,
+    MissingDependencyError,
+    SubtitleNotFoundError,
+    SubtitleSyncError,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mini.srt"
@@ -64,12 +64,12 @@ def test_validate_video_path_raises_when_path_is_directory(tmp_path):
 
 
 def test_check_ffmpeg_passes_when_binary_found(mocker):
-    mocker.patch("shutil.which", return_value="/usr/bin/ffmpeg")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
     check_ffmpeg()  # não deve levantar
 
 
 def test_check_ffmpeg_raises_when_binary_missing(mocker):
-    mocker.patch("shutil.which", return_value=None)
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value=None)
     with pytest.raises(MissingDependencyError, match="ffmpeg"):
         check_ffmpeg()
 
@@ -127,7 +127,7 @@ def stub_subliminal(mocker):
     só precisa garantir que `subtitle.text` seja uma string válida.
     """
     fake_video = mocker.MagicMock(name="Video")
-    mocker.patch("subs_down_n_sync.subliminal.scan_video", return_value=fake_video)
+    mocker.patch("subs_down_n_sync.core.subliminal.scan_video", return_value=fake_video)
 
     fake_sub = mocker.MagicMock()
     fake_sub.provider_name = "opensubtitles"
@@ -136,7 +136,7 @@ def stub_subliminal(mocker):
     fake_sub.get_matches.return_value = set()
 
     mocker.patch(
-        "subs_down_n_sync.subliminal.download_best_subtitles",
+        "subs_down_n_sync.core.subliminal.download_best_subtitles",
         return_value={fake_video: [fake_sub]},
     )
 
@@ -166,9 +166,9 @@ def test_find_and_download_subtitle_raises_when_no_results(tmp_path, mocker):
     video_path.write_bytes(b"\x00" * 10)
 
     fake_video = mocker.MagicMock()
-    mocker.patch("subs_down_n_sync.subliminal.scan_video", return_value=fake_video)
+    mocker.patch("subs_down_n_sync.core.subliminal.scan_video", return_value=fake_video)
     mocker.patch(
-        "subs_down_n_sync.subliminal.download_best_subtitles",
+        "subs_down_n_sync.core.subliminal.download_best_subtitles",
         return_value={fake_video: []},
     )
 
@@ -355,7 +355,7 @@ def test_finalize_output_path_handles_different_lang_from_saved_name(tmp_path):
 def test_run_full_pipeline_when_sync_needed(tmp_path, monkeypatch, mocker):
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
-    mocker.patch("shutil.which", return_value="/usr/bin/ffmpeg")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
 
     video = tmp_path / "Filme.mkv"
     video.write_bytes(b"\x00" * 10)
@@ -366,9 +366,9 @@ def test_run_full_pipeline_when_sync_needed(tmp_path, monkeypatch, mocker):
         downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
         return downloaded_path, SubtitleInfo(provider="opensubtitles", match_type="hash")
 
-    mocker.patch("subs_down_n_sync.find_and_download_subtitle", side_effect=fake_find)
+    mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
     mocker.patch(
-        "subs_down_n_sync.sync_subtitle_if_needed",
+        "subs_down_n_sync.core.sync_subtitle_if_needed",
         return_value=SyncResult(synced=True, offset_seconds=1.25),
     )
 
@@ -386,7 +386,7 @@ def test_run_full_pipeline_when_sync_needed(tmp_path, monkeypatch, mocker):
 def test_run_keeps_subtitle_when_ffsubsync_fails(tmp_path, monkeypatch, mocker):
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
-    mocker.patch("shutil.which", return_value="/usr/bin/ffmpeg")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
 
     video = tmp_path / "Filme.mkv"
     video.write_bytes(b"\x00" * 10)
@@ -397,9 +397,9 @@ def test_run_keeps_subtitle_when_ffsubsync_fails(tmp_path, monkeypatch, mocker):
         downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\nhi\n")
         return downloaded_path, SubtitleInfo(provider="opensubtitles", match_type="hash")
 
-    mocker.patch("subs_down_n_sync.find_and_download_subtitle", side_effect=fake_find)
+    mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
     mocker.patch(
-        "subs_down_n_sync.sync_subtitle_if_needed",
+        "subs_down_n_sync.core.sync_subtitle_if_needed",
         side_effect=SubtitleSyncError("boom"),
     )
 
@@ -414,7 +414,7 @@ def test_run_keeps_subtitle_when_ffsubsync_fails(tmp_path, monkeypatch, mocker):
 def test_main_success_prints_summary(tmp_path, monkeypatch, mocker, capsys):
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
-    mocker.patch("shutil.which", return_value="/usr/bin/ffmpeg")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
 
     video = tmp_path / "Filme.mkv"
     video.write_bytes(b"\x00" * 10)
@@ -429,7 +429,7 @@ def test_main_success_prints_summary(tmp_path, monkeypatch, mocker, capsys):
         elapsed_seconds=1.23,
         lang_tag="pt-BR",
     )
-    mocker.patch("subs_down_n_sync.run", return_value=fake_summary)
+    mocker.patch("subs_down_n_sync.cli.run", return_value=fake_summary)
 
     code = main([str(video)])
 
@@ -444,7 +444,7 @@ def test_main_success_prints_summary(tmp_path, monkeypatch, mocker, capsys):
 def test_main_lang_flag_uses_custom_language(tmp_path, monkeypatch, mocker):
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
-    mocker.patch("shutil.which", return_value="/usr/bin/ffmpeg")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
 
     video = tmp_path / "Filme.mkv"
     video.write_bytes(b"\x00" * 10)
@@ -459,7 +459,7 @@ def test_main_lang_flag_uses_custom_language(tmp_path, monkeypatch, mocker):
         elapsed_seconds=0.5,
         lang_tag="en",
     )
-    mock_run = mocker.patch("subs_down_n_sync.run", return_value=fake_summary)
+    mock_run = mocker.patch("subs_down_n_sync.cli.run", return_value=fake_summary)
 
     code = main([str(video), "--lang", "en"])
 

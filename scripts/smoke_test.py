@@ -12,13 +12,9 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
 
-# Permitir rodar de qualquer lugar do repo — importa o módulo flat do parent.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from exceptions import SubsDownError
-from subs_down_n_sync import DEFAULT_LANG, run
+from subs_down_n_sync.core import DEFAULT_LANG, run
+from subs_down_n_sync.exceptions import SubsDownError
 
 
 def main() -> int:
