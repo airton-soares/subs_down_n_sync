@@ -3,5 +3,8 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
 *.srt.bak
 tests/fixtures/.cache/
