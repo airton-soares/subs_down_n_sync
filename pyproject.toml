@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "subs-down-n-sync"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "subliminal>=2.2",
+    "ffsubsync>=0.4.25",
+    "setuptools<81",
+]
+
+[project.scripts]
+subs-down-n-sync = "subs_down_n_sync.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+    "pytest-cov>=6.0",
+    "ruff>=0.9",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+markers = ["integration: testes que dependem de ffmpeg, ffsubsync e rede"]
+addopts = "-m 'not integration' --cov=src/subs_down_n_sync --cov-report=term-missing --cov-fail-under=90"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.coverage.run]
+source = ["src/subs_down_n_sync"]
+
+[tool.coverage.report]
+fail_under = 90

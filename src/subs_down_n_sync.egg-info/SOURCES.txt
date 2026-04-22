@@ -1,0 +1,12 @@
+README.md
+pyproject.toml
+src/subs_down_n_sync/__init__.py
+src/subs_down_n_sync/__main__.py
+src/subs_down_n_sync.egg-info/PKG-INFO
+src/subs_down_n_sync.egg-info/SOURCES.txt
+src/subs_down_n_sync.egg-info/dependency_links.txt
+src/subs_down_n_sync.egg-info/entry_points.txt
+src/subs_down_n_sync.egg-info/requires.txt
+src/subs_down_n_sync.egg-info/top_level.txt
+tests/test_integration.py
+tests/test_subs_down_n_sync.py

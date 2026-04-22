@@ -1,0 +1,2 @@
+[console_scripts]
+subs-down-n-sync = subs_down_n_sync.cli:main
