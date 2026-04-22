@@ -80,4 +80,4 @@ jobs:
           key: sintel-trailer-480p-v1
 
       - name: Run integration tests
-        run: pytest -m integration
+        run: pytest -m integration --no-cov
