@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from exceptions import SubtitleSyncError
-from subs_down_n_sync import SYNC_THRESHOLD_SECONDS, sync_subtitle_if_needed
+from subs_down_n_sync.exceptions import SubtitleSyncError
+from subs_down_n_sync.core import SYNC_THRESHOLD_SECONDS, sync_subtitle_if_needed
 
 pytestmark = pytest.mark.integration
 
