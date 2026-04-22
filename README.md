@@ -48,7 +48,7 @@ pytest
 
 Os testes unitários rodam com gate de cobertura de 90% (configurado em `pytest.ini`). O CI falha se a cobertura cair abaixo disso.
 
-Para rodar sem o gate (útil ao explorar com `-k` ou `--co`):
+Para rodar sem o gate (útil ao explorar com `-k` ou `--collect-only`):
 
 ```bash
 pytest --no-cov
