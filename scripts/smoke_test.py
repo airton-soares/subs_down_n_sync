@@ -12,10 +12,9 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
 
-from subs_down_n_sync.exceptions import SubsDownError
 from subs_down_n_sync.core import DEFAULT_LANG, run
+from subs_down_n_sync.exceptions import SubsDownError
 
 
 def main() -> int:

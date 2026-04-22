@@ -4,14 +4,7 @@ from pathlib import Path
 import pytest
 from babelfish import Language
 
-from subs_down_n_sync.exceptions import (
-    InvalidLanguageError,
-    InvalidVideoError,
-    MissingCredentialsError,
-    MissingDependencyError,
-    SubtitleNotFoundError,
-    SubtitleSyncError,
-)
+from subs_down_n_sync.cli import main
 from subs_down_n_sync.core import (
     RunSummary,
     SubtitleInfo,
@@ -27,7 +20,14 @@ from subs_down_n_sync.core import (
     sync_subtitle_if_needed,
     validate_video_path,
 )
-from subs_down_n_sync.cli import main
+from subs_down_n_sync.exceptions import (
+    InvalidLanguageError,
+    InvalidVideoError,
+    MissingCredentialsError,
+    MissingDependencyError,
+    SubtitleNotFoundError,
+    SubtitleSyncError,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mini.srt"
 
