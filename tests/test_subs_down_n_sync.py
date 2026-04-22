@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from babelfish import Language
+
 from exceptions import (
     InvalidLanguageError,
     InvalidVideoError,
@@ -18,8 +19,8 @@ from subs_down_n_sync import (
     _mean_offset_seconds,
     _parse_srt_timestamps,
     check_ffmpeg,
-    find_and_download_subtitle,
     finalize_output_path,
+    find_and_download_subtitle,
     load_credentials,
     main,
     parse_language,
@@ -172,9 +173,7 @@ def test_find_and_download_subtitle_raises_when_no_results(tmp_path, mocker):
     )
 
     with pytest.raises(SubtitleNotFoundError, match="eng"):
-        find_and_download_subtitle(
-            video_path, language=Language("eng"), credentials=("u", "p")
-        )
+        find_and_download_subtitle(video_path, language=Language("eng"), credentials=("u", "p"))
 
 
 def test_match_type_is_release_when_no_hash(tmp_path, stub_subliminal):
@@ -270,8 +269,7 @@ def test_sync_replaces_original_when_offset_above_threshold(tmp_path, mocker):
     shutil_.copy(FIXTURE, srt)
 
     synced_text = (
-        "1\n00:00:03,000 --> 00:00:04,000\nlinha 1\n\n"
-        "2\n00:00:07,000 --> 00:00:08,000\nlinha 2\n"
+        "1\n00:00:03,000 --> 00:00:04,000\nlinha 1\n\n2\n00:00:07,000 --> 00:00:08,000\nlinha 2\n"
     )
 
     def fake_run(cmd, capture_output, text, check):  # noqa: ARG001

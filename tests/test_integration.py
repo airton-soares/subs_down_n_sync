@@ -5,6 +5,7 @@ Camada A da estratégia de testes. Rodar com:
 
 Download único e cacheado em tests/fixtures/.cache/.
 """
+
 from __future__ import annotations
 
 import random

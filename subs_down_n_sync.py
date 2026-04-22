@@ -1,4 +1,5 @@
 """subs_down_n_sync: busca e sincroniza legendas (pt-BR por padrão, qualquer BCP 47)."""
+
 from __future__ import annotations
 
 import argparse
@@ -111,8 +112,7 @@ def parse_language(raw: str) -> Language:
         return Language.fromietf(raw)
     except Exception as e:
         raise InvalidLanguageError(
-            f"Código de idioma inválido: {raw!r}. "
-            f"Use tags BCP 47 como 'pt-BR', 'en', 'es', 'ja'."
+            f"Código de idioma inválido: {raw!r}. Use tags BCP 47 como 'pt-BR', 'en', 'es', 'ja'."
         ) from e
 
 
@@ -156,9 +156,7 @@ def find_and_download_subtitle(
     # produz mojibake quando ferramentas como ffsubsync tentam re-detectar.
     # Em vez disso, pegamos o texto já decodificado e escrevemos em UTF-8.
     if not subtitle.text:
-        raise SubtitleNotFoundError(
-            f"Legenda veio vazia do provider para: {video_path.name}"
-        )
+        raise SubtitleNotFoundError(f"Legenda veio vazia do provider para: {video_path.name}")
 
     srt_path = video_path.parent / Path(subtitle.get_path(video)).name
     srt_path.write_text(subtitle.text, encoding="utf-8")
@@ -298,7 +296,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("video", help="Caminho para o arquivo de vídeo.")
     parser.add_argument(
-        "-l", "--lang",
+        "-l",
+        "--lang",
         default=DEFAULT_LANG,
         help=f"Código de idioma BCP 47 (ex: pt-BR, en, es). Default: {DEFAULT_LANG}.",
     )
