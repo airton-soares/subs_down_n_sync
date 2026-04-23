@@ -597,16 +597,21 @@ def test_find_and_download_subtitle_returns_ref_path_when_en_available(
     video_path = tmp_path / "Filme.mkv"
     video_path.write_bytes(b"\x00" * 10)
     stub_subliminal.get_matches.return_value = {"title"}
-    mocker.patch("subs_down_n_sync.core.compute_score", return_value=100)
 
     fake_ref_sub = mocker.MagicMock()
     fake_ref_sub.provider_name = "opensubtitles"
     fake_ref_sub.get_path.return_value = "Filme.en.srt"
     fake_ref_sub.text = "1\n00:00:01,000 --> 00:00:02,000\nhi\n"
-    fake_ref_sub.get_matches.return_value = {"title"}
+    fake_ref_sub.get_matches.return_value = {"hash"}  # hash → needs_sync=False
     fake_ref_sub.language = Language("eng")
 
     stub_subliminal.language = Language("por", country="BR")
+
+    # pt-BR score baixo (fallback), en score alto (hash) → só en é confiável como ref
+    mocker.patch(
+        "subs_down_n_sync.core.compute_score",
+        side_effect=lambda sub, video: 971 if sub is fake_ref_sub else 100,
+    )
 
     en_lang = Language("eng")
 
@@ -765,6 +770,51 @@ def test_find_and_download_subtitle_ref_path_none_when_en_not_available(
     )
 
     assert ref_path is None
+
+
+def test_find_and_download_subtitle_ref_path_none_when_en_needs_sync(
+    tmp_path, stub_subliminal, mocker
+):
+    """en com score baixo (fallback) → ref_path=None, evita referência não confiável."""
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+    stub_subliminal.get_matches.return_value = {"title"}
+    stub_subliminal.language = Language("por", country="BR")
+
+    fake_ref_sub = mocker.MagicMock()
+    fake_ref_sub.provider_name = "opensubtitles"
+    fake_ref_sub.get_path.return_value = "Filme.en.srt"
+    fake_ref_sub.text = "1\n00:00:01,000 --> 00:00:02,000\nhi\n"
+    fake_ref_sub.get_matches.return_value = {"title"}  # fallback — needs_sync=True
+    fake_ref_sub.language = Language("eng")
+
+    en_lang = Language("eng")
+
+    def list_subtitles_side_effect(videos, languages, **kwargs):
+        video = list(videos)[0]
+        result = {video: []}
+        for lang in languages:
+            if lang == en_lang:
+                result[video].append(fake_ref_sub)
+            else:
+                result[video].append(stub_subliminal)
+        return result
+
+    mocker.patch(
+        "subs_down_n_sync.core.subliminal.list_subtitles",
+        side_effect=list_subtitles_side_effect,
+    )
+
+    # score baixo para ambos (fallback)
+    mocker.patch("subs_down_n_sync.core.compute_score", return_value=100)
+
+    srt_path, info, ref_path = find_and_download_subtitle(
+        video_path,
+        language=Language("por", country="BR"),
+        credentials=("u", "p"),
+    )
+
+    assert ref_path is None  # en não confiável → não usar como referência
 
 
 def test_run_deletes_ref_path_after_sync(tmp_path, monkeypatch, mocker):

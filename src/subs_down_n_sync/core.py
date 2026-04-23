@@ -201,7 +201,13 @@ def find_and_download_subtitle(
     ref_candidates = (
         [s for s in candidates if getattr(s, "language", None) == en_lang] if needs_ref else []
     )
-    ref_subtitle = ref_candidates[0] if ref_candidates else None
+    # Usar en como referência só se ela própria não precisar de sync — legenda
+    # dessincronizada como referência piora o resultado do alass.
+    ref_subtitle = None
+    if ref_candidates:
+        _, _, ref_needs_sync = _pick_subtitle(ref_candidates, video)
+        if not ref_needs_sync:
+            ref_subtitle = ref_candidates[0]
 
     to_download = [subtitle]
     if ref_subtitle is not None:
