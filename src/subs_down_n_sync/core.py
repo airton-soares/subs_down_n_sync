@@ -185,17 +185,7 @@ def find_and_download_subtitle(
     video = subliminal.scan_video(str(video_path))
     hash_refine(video)
 
-    providers = ["opensubtitles"]
-    provider_configs: dict = {"opensubtitles": {"username": user, "password": pwd}}
-
-    oscom_key = os.environ.get("OPENSUBTITLESCOM_API_KEY")
-    if oscom_key:
-        providers.append("opensubtitlescom")
-        provider_configs["opensubtitlescom"] = {
-            "username": user,
-            "password": pwd,
-            "apikey": oscom_key,
-        }
+    provider_configs = {"opensubtitles": {"username": user, "password": pwd}}
 
     en_lang = Language("eng")
     needs_ref = language != en_lang
@@ -205,7 +195,7 @@ def find_and_download_subtitle(
     results = subliminal.list_subtitles(
         {video},
         languages_to_fetch,
-        providers=providers,
+        providers=["opensubtitles"],
         provider_configs=provider_configs,
     )
     candidates = results.get(video, [])
