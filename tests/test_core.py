@@ -355,7 +355,7 @@ def test_run_full_pipeline_when_sync_needed(tmp_path, monkeypatch, mocker):
     assert summary.lang_tag == "pt-BR"
 
 
-def test_run_keeps_subtitle_when_ffsubsync_fails(tmp_path, monkeypatch, mocker):
+def test_run_keeps_subtitle_when_sync_fails(tmp_path, monkeypatch, mocker):
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     mocker.patch(

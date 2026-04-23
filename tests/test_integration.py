@@ -1,4 +1,4 @@
-"""Testes de integração: exercitam ffsubsync com vídeo real baixado do Blender.
+"""Testes de integração: exercitam alass com vídeo real baixado do Blender.
 
 Camada A da estratégia de testes. Rodar com:
     pytest -m integration
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from subs_down_n_sync.core import SYNC_THRESHOLD_SECONDS, sync_subtitle_if_needed
+from subs_down_n_sync.core import SYNC_THRESHOLD_SECONDS, sync_subtitle
 from subs_down_n_sync.exceptions import SubtitleSyncError
 
 pytestmark = pytest.mark.integration
@@ -56,8 +56,8 @@ def _make_srt(cues: list[tuple[float, float, str]]) -> str:
 def sintel_trailer() -> Path:
     if not _have("ffmpeg"):
         pytest.skip("ffmpeg não instalado")
-    if not _have("ffsubsync"):
-        pytest.skip("ffsubsync não instalado")
+    if not _have("alass"):
+        pytest.skip("alass não instalado")
 
     if VIDEO_CACHE.exists():
         return VIDEO_CACHE
@@ -79,8 +79,8 @@ def sintel_trailer() -> Path:
     return VIDEO_CACHE
 
 
-def test_ffsubsync_detects_random_per_cue_shift_and_replaces_original(sintel_trailer, tmp_path):
-    """ffsubsync deve detectar dessincronia aleatória por cue (0–2s) e substituir o SRT."""
+def test_alass_detects_random_per_cue_shift_and_replaces_original(sintel_trailer, tmp_path):
+    """alass deve detectar dessincronia aleatória por cue (0–2s) e substituir o SRT."""
     # Seed fixa para reprodutibilidade dos shifts entre runs.
     rng = random.Random(42)
     base_cues = [(5.0, 7.0, "cue 1"), (15.0, 17.0, "cue 2"), (30.0, 32.0, "cue 3")]
@@ -93,11 +93,11 @@ def test_ffsubsync_detects_random_per_cue_shift_and_replaces_original(sintel_tra
     srt_path.write_text(_make_srt(shifted_cues), encoding="utf-8")
     original_content = srt_path.read_text(encoding="utf-8")
 
-    result = sync_subtitle_if_needed(sintel_trailer, srt_path)
+    result = sync_subtitle(sintel_trailer, srt_path, ref_path=None)
 
-    # Tolerância larga: ffsubsync não é determinístico em áudios curtos com música.
+    # Tolerância larga: alass pode variar em áudios curtos com música.
     assert result.synced is True, (
-        f"ffsubsync deveria detectar os shifts aleatórios como acima do limiar "
+        f"alass deveria detectar os shifts aleatórios como acima do limiar "
         f"{SYNC_THRESHOLD_SECONDS}s, mas offset medido foi {result.offset_seconds:.3f}s"
     )
     assert 0.1 <= result.offset_seconds < 6.0, (
@@ -105,11 +105,14 @@ def test_ffsubsync_detects_random_per_cue_shift_and_replaces_original(sintel_tra
     )
     assert srt_path.exists()
     assert srt_path.read_text(encoding="utf-8") != original_content
-    assert not list(tmp_path.glob("*.sync.srt")), "não deve restar arquivo .sync.srt temporário"
+    assert not list(tmp_path.glob("*.synced.srt")), "não deve restar arquivo .synced.srt temporário"
 
 
-def test_ffsubsync_fails_cleanly_on_bad_video(tmp_path):
-    """ffsubsync deve falhar com SubtitleSyncError ao receber vídeo corrompido."""
+def test_alass_fails_cleanly_on_bad_video(tmp_path):
+    """alass deve falhar com SubtitleSyncError ao receber vídeo corrompido."""
+    if not _have("alass"):
+        pytest.skip("alass não instalado")
+
     bogus_video = tmp_path / "bogus.mkv"
     bogus_video.write_bytes(b"\x00\x01\x02\x03")
 
@@ -117,4 +120,4 @@ def test_ffsubsync_fails_cleanly_on_bad_video(tmp_path):
     srt_path.write_text(_make_srt([(1.0, 2.0, "teste")]), encoding="utf-8")
 
     with pytest.raises(SubtitleSyncError):
-        sync_subtitle_if_needed(bogus_video, srt_path)
+        sync_subtitle(bogus_video, srt_path, ref_path=None)

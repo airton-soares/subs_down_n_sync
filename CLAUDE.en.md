@@ -42,11 +42,17 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Also install `ffmpeg` on your system:
+Install system dependencies:
 
 ```bash
+# ffmpeg
 sudo apt install ffmpeg    # Debian/Ubuntu
 brew install ffmpeg        # macOS
+
+# alass (Rust binary — download release from https://github.com/kaegi/alass/releases)
+# Linux x86_64 example:
+curl -L https://github.com/kaegi/alass/releases/latest/download/alass-linux-amd64 -o ~/.local/bin/alass
+chmod +x ~/.local/bin/alass
 ```
 
 Configure OpenSubtitles credentials:
@@ -72,7 +78,7 @@ python -m subs_down_n_sync /path/to/movie.mkv
 ```bash
 pytest                    # unit tests (default, with 90% coverage gate)
 pytest --no-cov           # no gate (useful with -k or --collect-only)
-pytest -m integration     # integration tests (requires ffmpeg, ffsubsync and network)
+pytest -m integration     # integration tests (requires ffmpeg, alass and network)
 pytest -m ""              # everything (unit + integration)
 ```
 

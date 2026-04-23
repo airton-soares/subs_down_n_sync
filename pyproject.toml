@@ -8,7 +8,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "subliminal>=2.2",
-    "ffsubsync>=0.4.25",
+    # alass: instalar binário separadamente — ver CLAUDE.md
     "setuptools<81",
 ]
 
@@ -27,7 +27,7 @@ dev = [
 where = ["src"]
 
 [tool.pytest.ini_options]
-markers = ["integration: testes que dependem de ffmpeg, ffsubsync e rede"]
+markers = ["integration: testes que dependem de ffmpeg, alass e rede"]
 addopts = "-m 'not integration' --cov=src/subs_down_n_sync --cov-report=term-missing --cov-fail-under=90"
 
 [tool.ruff]
