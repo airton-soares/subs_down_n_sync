@@ -50,6 +50,7 @@ _TS_RE = re.compile(
 class SyncResult:
     synced: bool
     offset_seconds: float
+    sync_mode: str = "none"  # "ref" | "video" | "none"
 
 
 @dataclass(frozen=True)
@@ -250,30 +251,30 @@ def _mean_offset_seconds(orig: list[float], synced: list[float]) -> float:
     return total / n
 
 
-def sync_subtitle_if_needed(video_path: Path, srt_path: Path) -> SyncResult:
-    synced_path = srt_path.with_suffix(".sync.srt")
-    cmd = [
-        "ffsubsync",
-        str(video_path),
-        "-i",
-        str(srt_path),
-        "-o",
-        str(synced_path),
-    ]
+def sync_subtitle(
+    video_path: Path,
+    srt_path: Path,
+    ref_path: Path | None,
+) -> SyncResult:
+    synced_path = srt_path.with_suffix(".synced.srt")
+    reference = str(ref_path) if ref_path is not None else str(video_path)
+    sync_mode = "ref" if ref_path is not None else "video"
+
+    cmd = ["alass", reference, str(srt_path), str(synced_path)]
 
     try:
         subprocess.run(cmd, capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
         raise SubtitleSyncError(
-            f"ffsubsync falhou (exit {e.returncode}): {e.stderr or e.stdout or '<sem saída>'}"
+            f"alass falhou (exit {e.returncode}): {e.stderr or e.stdout or '<sem saída>'}"
         ) from e
     except FileNotFoundError as e:
         raise SubtitleSyncError(
-            "ffsubsync não encontrado no PATH. Instalou as deps do requirements.txt?"
+            "alass não encontrado no PATH. Baixe em https://github.com/kaegi/alass/releases"
         ) from e
 
     if not synced_path.exists():
-        raise SubtitleSyncError("ffsubsync terminou sem criar o arquivo de saída.")
+        raise SubtitleSyncError("alass terminou sem criar o arquivo de saída.")
 
     orig_ts = _parse_srt_timestamps(srt_path.read_text(encoding="utf-8", errors="replace"))
     sync_ts = _parse_srt_timestamps(synced_path.read_text(encoding="utf-8", errors="replace"))
@@ -281,12 +282,10 @@ def sync_subtitle_if_needed(video_path: Path, srt_path: Path) -> SyncResult:
 
     if offset < SYNC_THRESHOLD_SECONDS:
         synced_path.unlink(missing_ok=True)
-
-        return SyncResult(synced=False, offset_seconds=offset)
+        return SyncResult(synced=False, offset_seconds=offset, sync_mode="none")
 
     synced_path.replace(srt_path)
-
-    return SyncResult(synced=True, offset_seconds=offset)
+    return SyncResult(synced=True, offset_seconds=offset, sync_mode=sync_mode)
 
 
 def finalize_output_path(video_path: Path, srt_path: Path, lang_tag: str) -> Path:
@@ -315,7 +314,7 @@ def run(video_arg: str, lang_tag: str = DEFAULT_LANG) -> RunSummary:
     sync_error: str | None = None
     if info.needs_sync:
         try:
-            sync_result = sync_subtitle_if_needed(video_path, srt_path)
+            sync_result = sync_subtitle(video_path, srt_path, ref_path)
         except SubtitleSyncError as e:
             sync_error = str(e)
             sync_result = SyncResult(synced=False, offset_seconds=0.0)

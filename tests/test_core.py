@@ -19,7 +19,7 @@ from subs_down_n_sync.core import (
     load_credentials,
     parse_language,
     run,
-    sync_subtitle_if_needed,
+    sync_subtitle,
     validate_video_path,
 )
 from subs_down_n_sync.exceptions import (
@@ -268,68 +268,6 @@ def test_mean_offset_seconds_uses_min_length_when_sizes_differ():
     assert _mean_offset_seconds([1.0, 5.0, 10.0], [1.5, 5.5]) == pytest.approx(0.5)
 
 
-def test_sync_skips_replacement_when_offset_below_threshold(tmp_path, mocker):
-    video = tmp_path / "Filme.mkv"
-    video.write_bytes(b"\x00" * 10)
-    srt = tmp_path / "Filme.pt-BR.srt"
-    shutil_.copy(FIXTURE, srt)
-
-    def fake_run(cmd, capture_output, text, check):  # noqa: ARG001
-        out = Path([a for a in cmd if a.endswith(".sync.srt")][0])
-        out.write_text(
-            "1\n00:00:01,050 --> 00:00:02,050\nlinha 1\n\n"
-            "2\n00:00:05,050 --> 00:00:06,050\nlinha 2\n"
-        )
-        return mocker.MagicMock(returncode=0, stdout="", stderr="")
-
-    mocker.patch("subprocess.run", side_effect=fake_run)
-
-    result = sync_subtitle_if_needed(video, srt)
-    assert result == SyncResult(synced=False, offset_seconds=pytest.approx(0.05))
-    assert srt.read_text() == FIXTURE.read_text()
-
-
-def test_sync_replaces_original_when_offset_above_threshold(tmp_path, mocker):
-    video = tmp_path / "Filme.mkv"
-    video.write_bytes(b"\x00" * 10)
-    srt = tmp_path / "Filme.pt-BR.srt"
-    shutil_.copy(FIXTURE, srt)
-
-    synced_text = (
-        "1\n00:00:03,000 --> 00:00:04,000\nlinha 1\n\n2\n00:00:07,000 --> 00:00:08,000\nlinha 2\n"
-    )
-
-    def fake_run(cmd, capture_output, text, check):  # noqa: ARG001
-        out = Path([a for a in cmd if a.endswith(".sync.srt")][0])
-        out.write_text(synced_text)
-        return mocker.MagicMock(returncode=0, stdout="", stderr="")
-
-    mocker.patch("subprocess.run", side_effect=fake_run)
-
-    result = sync_subtitle_if_needed(video, srt)
-    assert result.synced is True
-    assert result.offset_seconds == pytest.approx(2.0)
-    assert srt.read_text() == synced_text
-
-
-def test_sync_raises_when_ffsubsync_fails(tmp_path, mocker):
-    import subprocess
-
-    video = tmp_path / "Filme.mkv"
-    video.write_bytes(b"\x00" * 10)
-    srt = tmp_path / "Filme.pt-BR.srt"
-    shutil_.copy(FIXTURE, srt)
-
-    mocker.patch(
-        "subprocess.run",
-        side_effect=subprocess.CalledProcessError(1, "ffsubsync", stderr="boom"),
-    )
-
-    with pytest.raises(SubtitleSyncError, match="ffsubsync"):
-        sync_subtitle_if_needed(video, srt)
-    assert srt.read_text() == FIXTURE.read_text()
-
-
 def test_finalize_output_path_renames_with_language_tag(tmp_path):
     video = tmp_path / "Filme.2024.mkv"
     srt = tmp_path / "Filme.2024.pt-BR.srt"
@@ -402,7 +340,7 @@ def test_run_full_pipeline_when_sync_needed(tmp_path, monkeypatch, mocker):
 
     mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
     mocker.patch(
-        "subs_down_n_sync.core.sync_subtitle_if_needed",
+        "subs_down_n_sync.core.sync_subtitle",
         return_value=SyncResult(synced=True, offset_seconds=1.25),
     )
 
@@ -440,7 +378,7 @@ def test_run_keeps_subtitle_when_ffsubsync_fails(tmp_path, monkeypatch, mocker):
 
     mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
     mocker.patch(
-        "subs_down_n_sync.core.sync_subtitle_if_needed",
+        "subs_down_n_sync.core.sync_subtitle",
         side_effect=SubtitleSyncError("boom"),
     )
 
@@ -608,7 +546,7 @@ def test_run_skips_sync_when_needs_sync_false(tmp_path, monkeypatch, mocker):
         )
 
     mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
-    mock_sync = mocker.patch("subs_down_n_sync.core.sync_subtitle_if_needed")
+    mock_sync = mocker.patch("subs_down_n_sync.core.sync_subtitle")
 
     summary = run(str(video), lang_tag="pt-BR")
 
@@ -641,7 +579,7 @@ def test_run_calls_sync_when_needs_sync_true(tmp_path, monkeypatch, mocker):
 
     mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
     mock_sync = mocker.patch(
-        "subs_down_n_sync.core.sync_subtitle_if_needed",
+        "subs_down_n_sync.core.sync_subtitle",
         return_value=SyncResult(synced=True, offset_seconds=1.5),
     )
 
@@ -712,6 +650,91 @@ def test_find_and_download_subtitle_ref_path_none_when_target_is_en(
     )
 
     assert ref_path is None
+
+
+def test_sync_subtitle_uses_ref_srt_when_available(tmp_path, mocker):
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    srt = tmp_path / "Filme.pt-BR.srt"
+    shutil_.copy(FIXTURE, srt)
+    ref = tmp_path / "Filme.en.srt"
+    shutil_.copy(FIXTURE, ref)
+
+    synced_text = "1\n00:00:03,000 --> 00:00:04,000\nlinha 1\n"
+
+    def fake_run(cmd, capture_output, text, check):
+        assert str(ref) == cmd[1]  # referência é segundo argumento
+        assert str(srt) == cmd[2]  # alvo é terceiro
+        Path(cmd[3]).write_text(synced_text)
+        return mocker.MagicMock(returncode=0, stdout="", stderr="")
+
+    mocker.patch("subprocess.run", side_effect=fake_run)
+
+    result = sync_subtitle(video, srt, ref_path=ref)
+
+    assert result.synced is True
+    assert result.sync_mode == "ref"
+    assert srt.read_text() == synced_text
+
+
+def test_sync_subtitle_uses_video_when_ref_not_available(tmp_path, mocker):
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    srt = tmp_path / "Filme.pt-BR.srt"
+    shutil_.copy(FIXTURE, srt)
+
+    synced_text = "1\n00:00:03,000 --> 00:00:04,000\nlinha 1\n"
+
+    def fake_run(cmd, capture_output, text, check):
+        assert str(video) == cmd[1]  # vídeo é segundo argumento
+        assert str(srt) == cmd[2]  # alvo é terceiro
+        Path(cmd[3]).write_text(synced_text)
+        return mocker.MagicMock(returncode=0, stdout="", stderr="")
+
+    mocker.patch("subprocess.run", side_effect=fake_run)
+
+    result = sync_subtitle(video, srt, ref_path=None)
+
+    assert result.synced is True
+    assert result.sync_mode == "video"
+
+
+def test_sync_subtitle_raises_when_alass_fails(tmp_path, mocker):
+    import subprocess as subprocess_
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    srt = tmp_path / "Filme.pt-BR.srt"
+    shutil_.copy(FIXTURE, srt)
+
+    mocker.patch(
+        "subprocess.run",
+        side_effect=subprocess_.CalledProcessError(1, "alass", stderr="erro alass"),
+    )
+
+    with pytest.raises(SubtitleSyncError, match="alass"):
+        sync_subtitle(video, srt, ref_path=None)
+
+    assert srt.read_text() == FIXTURE.read_text()
+
+
+def test_sync_subtitle_returns_not_synced_when_output_identical(tmp_path, mocker):
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    srt = tmp_path / "Filme.pt-BR.srt"
+    shutil_.copy(FIXTURE, srt)
+    original_text = srt.read_text()
+
+    def fake_run(cmd, capture_output, text, check):
+        Path(cmd[3]).write_text(original_text)
+        return mocker.MagicMock(returncode=0, stdout="", stderr="")
+
+    mocker.patch("subprocess.run", side_effect=fake_run)
+
+    result = sync_subtitle(video, srt, ref_path=None)
+
+    assert result.synced is False
+    assert srt.read_text() == original_text
 
 
 def test_find_and_download_subtitle_ref_path_none_when_en_not_available(
