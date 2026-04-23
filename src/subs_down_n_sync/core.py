@@ -330,11 +330,45 @@ def _detect_fps_ratio(srt_text: str, ref_text: str) -> float:
     return best
 
 
-def align_subtitle_to_reference(srt_text: str, ref_text: str) -> str:
-    """Alinha legenda à referência: aplica shift temporal + correção de FPS.
+def _best_shift_by_correlation(
+    target_ts: list[float],
+    ref_ts: list[float],
+    fps_ratio: float,
+    search_range: float = 180.0,
+    step: float = 0.5,
+    tolerance: float = 1.0,
+) -> float:
+    """Encontra o shift que maximiza o número de timestamps alinhados.
 
-    Shift = primeiro timestamp da ref - primeiro timestamp da legenda alvo.
-    FPS ratio = duração total ref / duração total alvo (snapped para pares conhecidos).
+    Para cada offset candidato, conta quantos timestamps da legenda alvo
+    (após aplicar fps_ratio e offset) ficam a ≤ tolerance de algum timestamp
+    da referência. Retorna o offset com maior contagem.
+    """
+    best_shift = 0.0
+    best_count = -1
+    best_abs = float("inf")
+
+    offset = -search_range
+    while offset <= search_range:
+        count = sum(
+            1
+            for t in target_ts
+            if any(abs(t * fps_ratio + offset - r) <= tolerance for r in ref_ts)
+        )
+        if count > best_count or (count == best_count and abs(offset) < best_abs):
+            best_count = count
+            best_shift = offset
+            best_abs = abs(offset)
+        offset += step
+
+    return best_shift
+
+
+def align_subtitle_to_reference(srt_text: str, ref_text: str) -> str:
+    """Alinha legenda à referência via correlação de timestamps + correção de FPS.
+
+    Testa shifts de -180s a +180s e escolhe o que maximiza o overlap com a
+    referência, evitando ancoragem no primeiro cue (que pode ser abertura).
     """
     ref_starts = _parse_srt_timestamps(ref_text)
     target_starts = _parse_srt_timestamps(srt_text)
@@ -342,8 +376,8 @@ def align_subtitle_to_reference(srt_text: str, ref_text: str) -> str:
     if not ref_starts or not target_starts:
         return srt_text
 
-    shift = ref_starts[0] - target_starts[0]
     fps_ratio = _detect_fps_ratio(srt_text, ref_text)
+    shift = _best_shift_by_correlation(target_starts, ref_starts, fps_ratio)
 
     def replace_ts(m: re.Match) -> str:
         t_start = _ts_to_seconds(m.group(1), m.group(2), m.group(3), m.group(4))

@@ -869,24 +869,32 @@ def test_run_deletes_ref_path_after_sync(tmp_path, monkeypatch, mocker):
 # --- testes para align_subtitle_to_reference ---
 
 
-def test_align_subtitle_shifts_and_scales_timestamps():
-    """Shift + FPS scale aplicados corretamente."""
-    # ref começa em 74s, pt começa em 2.951s → shift = 74 - 2.951 = 71.049s
-    # FPS: pt em 25fps, ref em 23.976fps → scale = 23.976/25
-    ref_text = "1\n00:01:14,000 --> 00:01:16,000\nhi\n"
-    pt_text = "1\n00:00:02,951 --> 00:00:05,053\noi\n\n2\n00:00:05,054 --> 00:00:07,288\ndois\n"
+def test_align_subtitle_finds_best_shift_by_correlation():
+    """Shift encontrado por correlação — não depende do primeiro cue."""
+    # pt-BR tem cues em 2s, 5s, 74s, 77s (abertura 2s e 5s, episódio 74s e 77s)
+    # en tem cues apenas em 74s, 77s (sem abertura)
+    # shift correto = 72s (74-2 da abertura não, 74 alinha com 74 do episódio)
+    pt_text = (
+        "1\n00:00:02,000 --> 00:00:04,000\nabertura\n\n"
+        "2\n00:00:05,000 --> 00:00:07,000\nabertura2\n\n"
+        "3\n00:01:14,000 --> 00:01:16,000\nepisódio\n\n"
+        "4\n00:01:17,000 --> 00:01:19,000\nepisódio2\n"
+    )
+    ref_text = (
+        "1\n00:01:14,000 --> 00:01:16,000\nepisode\n\n2\n00:01:17,000 --> 00:01:19,000\nepisode2\n"
+    )
 
     result = align_subtitle_to_reference(pt_text, ref_text)
 
-    # primeiro cue deve começar perto de 74s
     timestamps = _parse_srt_timestamps(result)
-    assert abs(timestamps[0] - 74.0) < 1.0
+    # cue 3 (episódio) deve estar perto de 74s — shift ~0s (já alinhado)
+    assert abs(timestamps[2] - 74.0) < 1.0
 
 
 def test_align_subtitle_returns_valid_srt():
     """Output é SRT válido com timestamps positivos."""
     ref_text = "1\n00:01:14,000 --> 00:01:16,000\nhi\n"
-    pt_text = "1\n00:00:02,951 --> 00:00:05,053\noi\n"
+    pt_text = "1\n00:00:02,000 --> 00:00:04,000\noi\n\n2\n00:01:14,000 --> 00:01:16,000\noi2\n"
 
     result = align_subtitle_to_reference(pt_text, ref_text)
 
