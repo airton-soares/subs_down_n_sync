@@ -12,6 +12,7 @@ from pathlib import Path
 
 import subliminal
 from babelfish import Language
+from subliminal.score import compute_score, get_scores
 
 from subs_down_n_sync.exceptions import (
     InvalidLanguageError,
@@ -27,10 +28,14 @@ VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".we
 DEFAULT_LANG = "pt-BR"
 
 
+SCORE_THRESHOLD = 0.9  # score/max_score >= 90% → sem sync
+
+
 @dataclass(frozen=True)
 class SubtitleInfo:
     provider: str
     match_type: str  # "hash" | "release" | "fallback"
+    needs_sync: bool
 
 
 SYNC_THRESHOLD_SECONDS = 0.1
@@ -64,6 +69,14 @@ def check_ffmpeg() -> None:
         raise MissingDependencyError(
             "ffmpeg não encontrado no PATH. Instale via gerenciador de pacotes "
             "(ex.: sudo apt install ffmpeg, brew install ffmpeg)."
+        )
+
+
+def check_alass() -> None:
+    if shutil.which("alass") is None:
+        raise MissingDependencyError(
+            "alass não encontrado no PATH. Baixe o binário em "
+            "https://github.com/kaegi/alass/releases e coloque no PATH."
         )
 
 
@@ -122,6 +135,36 @@ def _classify_match(matches: set[str]) -> str:
     return "fallback"
 
 
+def _pick_subtitle(
+    candidates: list,
+    video: object,
+) -> tuple[object, str, bool]:
+    """Escolhe melhor legenda e decide se precisa de sync.
+
+    Retorna (subtitle, match_type, needs_sync).
+    Ordem de preferência:
+      1. score >= 90% do máximo → sem sync
+      2. release_group match → sem sync
+      3. melhor score disponível → com sync
+    """
+    max_score = get_scores(video)["hash"]
+    threshold = int(max_score * SCORE_THRESHOLD)
+
+    scored = [(sub, compute_score(sub, video)) for sub in candidates]
+    scored.sort(key=lambda x: x[1], reverse=True)
+
+    for sub, score in scored:
+        matches = set(sub.get_matches(video))
+        if score >= threshold:
+            return sub, _classify_match(matches), False
+        if "release_group" in matches:
+            return sub, "release", False
+
+    best_sub, _ = scored[0]
+    match_type = _classify_match(set(best_sub.get_matches(video)))
+    return best_sub, match_type, True
+
+
 def find_and_download_subtitle(
     video_path: Path,
     language: Language,
@@ -133,25 +176,29 @@ def find_and_download_subtitle(
         "opensubtitles": {"username": user, "password": pwd},
     }
 
-    results = subliminal.download_best_subtitles(
+    results = subliminal.list_subtitles(
         {video},
         {language},
         providers=["opensubtitles"],
         provider_configs=provider_configs,
     )
-    subs = results.get(video, [])
+    candidates = results.get(video, [])
 
-    if not subs:
+    if not candidates:
         raise SubtitleNotFoundError(
             f"Nenhuma legenda em {language.alpha3} encontrada para: {video_path.name}"
         )
 
-    subtitle = subs[0]
+    subtitle, match_type, needs_sync = _pick_subtitle(candidates, video)
+
+    subliminal.download_subtitles(
+        [subtitle],
+        provider_configs=provider_configs,
+    )
 
     # Não usamos subliminal.save_subtitles porque ele grava os bytes crus no
-    # encoding detectado (ex.: cp1252) em um arquivo UTF-8 por convenção, o que
-    # produz mojibake quando ferramentas como ffsubsync tentam re-detectar.
-    # Em vez disso, pegamos o texto já decodificado e escrevemos em UTF-8.
+    # encoding detectado (ex.: cp1252), produzindo mojibake. Pegamos o texto
+    # já decodificado e escrevemos em UTF-8.
     if not subtitle.text:
         raise SubtitleNotFoundError(f"Legenda veio vazia do provider para: {video_path.name}")
 
@@ -160,7 +207,8 @@ def find_and_download_subtitle(
 
     info = SubtitleInfo(
         provider=subtitle.provider_name,
-        match_type=_classify_match(set(subtitle.get_matches(video))),
+        match_type=match_type,
+        needs_sync=needs_sync,
     )
 
     return srt_path, info
@@ -240,6 +288,7 @@ def run(video_arg: str, lang_tag: str = DEFAULT_LANG) -> RunSummary:
     start = time.monotonic()
     video_path = validate_video_path(video_arg)
     check_ffmpeg()
+    check_alass()
     language = parse_language(lang_tag)
     credentials = load_credentials()
 
@@ -248,10 +297,13 @@ def run(video_arg: str, lang_tag: str = DEFAULT_LANG) -> RunSummary:
     )
 
     sync_error: str | None = None
-    try:
-        sync_result = sync_subtitle_if_needed(video_path, srt_path)
-    except SubtitleSyncError as e:
-        sync_error = str(e)
+    if info.needs_sync:
+        try:
+            sync_result = sync_subtitle_if_needed(video_path, srt_path)
+        except SubtitleSyncError as e:
+            sync_error = str(e)
+            sync_result = SyncResult(synced=False, offset_seconds=0.0)
+    else:
         sync_result = SyncResult(synced=False, offset_seconds=0.0)
 
     final_path = finalize_output_path(video_path, srt_path, lang_tag=lang_tag)
