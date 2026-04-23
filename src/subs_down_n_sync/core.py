@@ -12,6 +12,7 @@ from pathlib import Path
 
 import subliminal
 from babelfish import Language
+from subliminal.refiners.hash import refine as hash_refine
 from subliminal.score import compute_score, get_scores
 
 from subs_down_n_sync.exceptions import (
@@ -174,6 +175,7 @@ def find_and_download_subtitle(
 ) -> tuple[Path, SubtitleInfo, Path | None]:
     user, pwd = credentials
     video = subliminal.scan_video(str(video_path))
+    hash_refine(video)
     provider_configs = {
         "opensubtitles": {"username": user, "password": pwd},
     }

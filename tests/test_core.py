@@ -169,6 +169,23 @@ def stub_subliminal(mocker):
     return fake_sub
 
 
+def test_find_and_download_subtitle_calls_hash_refiner(tmp_path, stub_subliminal, mocker):
+    """scan_video não computa hash automaticamente — hash_refine deve ser chamado."""
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+    stub_subliminal.get_matches.return_value = {"title"}
+
+    mock_refine = mocker.patch("subs_down_n_sync.core.hash_refine")
+
+    find_and_download_subtitle(
+        video_path,
+        language=Language("por", country="BR"),
+        credentials=("u", "p"),
+    )
+
+    mock_refine.assert_called_once()
+
+
 def test_find_and_download_subtitle_returns_path_and_info(tmp_path, stub_subliminal):
     video_path = tmp_path / "Filme.2024.1080p.mkv"
     video_path.write_bytes(b"\x00" * 10)
