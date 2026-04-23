@@ -60,6 +60,7 @@ class RunSummary:
     match_type: str
     synced: bool
     offset_seconds: float
+    sync_mode: str
     sync_error: str | None
     elapsed_seconds: float
     lang_tag: str
@@ -317,9 +318,12 @@ def run(video_arg: str, lang_tag: str = DEFAULT_LANG) -> RunSummary:
             sync_result = sync_subtitle(video_path, srt_path, ref_path)
         except SubtitleSyncError as e:
             sync_error = str(e)
-            sync_result = SyncResult(synced=False, offset_seconds=0.0)
+            sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
+        finally:
+            if ref_path is not None:
+                ref_path.unlink(missing_ok=True)
     else:
-        sync_result = SyncResult(synced=False, offset_seconds=0.0)
+        sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
 
     final_path = finalize_output_path(video_path, srt_path, lang_tag=lang_tag)
     elapsed = time.monotonic() - start
@@ -330,6 +334,7 @@ def run(video_arg: str, lang_tag: str = DEFAULT_LANG) -> RunSummary:
         match_type=info.match_type,
         synced=sync_result.synced,
         offset_seconds=sync_result.offset_seconds,
+        sync_mode=sync_result.sync_mode,
         sync_error=sync_error,
         elapsed_seconds=elapsed,
         lang_tag=lang_tag,

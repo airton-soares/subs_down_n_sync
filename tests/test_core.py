@@ -407,6 +407,7 @@ def test_main_success_prints_summary(tmp_path, monkeypatch, mocker, capsys):
         match_type="hash",
         synced=True,
         offset_seconds=0.42,
+        sync_mode="ref",
         sync_error=None,
         elapsed_seconds=1.23,
         lang_tag="pt-BR",
@@ -440,6 +441,7 @@ def test_main_lang_flag_uses_custom_language(tmp_path, monkeypatch, mocker):
         match_type="hash",
         synced=False,
         offset_seconds=0.0,
+        sync_mode="none",
         sync_error=None,
         elapsed_seconds=0.5,
         lang_tag="en",
@@ -763,3 +765,37 @@ def test_find_and_download_subtitle_ref_path_none_when_en_not_available(
     )
 
     assert ref_path is None
+
+
+def test_run_deletes_ref_path_after_sync(tmp_path, monkeypatch, mocker):
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch(
+        "subs_down_n_sync.core.shutil.which",
+        side_effect=lambda name: f"/usr/bin/{name}",
+    )
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+
+    downloaded_path = tmp_path / "Filme.pt-BR.srt"
+    ref_path = tmp_path / "Filme.en.srt"
+
+    def fake_find(video_path, language, credentials):
+        downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+        ref_path.write_text("1\n00:00:01,000 --> 00:00:02,000\nhi\n")
+        return (
+            downloaded_path,
+            SubtitleInfo(provider="opensubtitles", match_type="fallback", needs_sync=True),
+            ref_path,
+        )
+
+    mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
+    mocker.patch(
+        "subs_down_n_sync.core.sync_subtitle",
+        return_value=SyncResult(synced=True, offset_seconds=1.5, sync_mode="ref"),
+    )
+
+    run(str(video), lang_tag="pt-BR")
+
+    assert not ref_path.exists()
