@@ -158,6 +158,7 @@ def stub_subliminal(mocker):
     fake_sub.get_path.return_value = "Filme.pt-BR.srt"
     fake_sub.text = "1\n00:00:01,000 --> 00:00:02,000\noi\n"
     fake_sub.get_matches.return_value = set()
+    fake_sub.language = Language("por", country="BR")
 
     mocker.patch(
         "subs_down_n_sync.core.subliminal.list_subtitles",
@@ -174,7 +175,7 @@ def test_find_and_download_subtitle_returns_path_and_info(tmp_path, stub_sublimi
     stub_subliminal.get_matches.return_value = {"hash", "release_group"}
     stub_subliminal.get_path.return_value = "Filme.2024.1080p.pt-BR.srt"
 
-    srt_path, info = find_and_download_subtitle(
+    srt_path, info, _ = find_and_download_subtitle(
         video_path,
         language=Language("por", country="BR"),
         credentials=("u", "p"),
@@ -207,7 +208,7 @@ def test_match_type_is_release_when_no_hash(tmp_path, stub_subliminal):
     video_path.write_bytes(b"\x00" * 10)
     stub_subliminal.get_matches.return_value = {"release_group", "resolution"}
 
-    _, info = find_and_download_subtitle(
+    _, info, _ = find_and_download_subtitle(
         video_path,
         language=Language("por", country="BR"),
         credentials=("u", "p"),
@@ -220,7 +221,7 @@ def test_match_type_is_fallback_when_only_title_match(tmp_path, stub_subliminal)
     video_path.write_bytes(b"\x00" * 10)
     stub_subliminal.get_matches.return_value = {"title"}
 
-    _, info = find_and_download_subtitle(
+    _, info, _ = find_and_download_subtitle(
         video_path,
         language=Language("por", country="BR"),
         credentials=("u", "p"),
@@ -237,7 +238,7 @@ def test_find_and_download_subtitle_writes_utf8(tmp_path, stub_subliminal):
     video_path.write_bytes(b"\x00" * 10)
     stub_subliminal.text = "1\n00:00:01,000 --> 00:00:02,000\nVocê não está lá.\n"
 
-    srt_path, _ = find_and_download_subtitle(
+    srt_path, _, _ref = find_and_download_subtitle(
         video_path,
         language=Language("por", country="BR"),
         credentials=("u", "p"),
@@ -393,8 +394,10 @@ def test_run_full_pipeline_when_sync_needed(tmp_path, monkeypatch, mocker):
 
     def fake_find(video_path, language, credentials):
         downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
-        return downloaded_path, SubtitleInfo(
-            provider="opensubtitles", match_type="hash", needs_sync=True
+        return (
+            downloaded_path,
+            SubtitleInfo(provider="opensubtitles", match_type="hash", needs_sync=True),
+            None,
         )
 
     mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
@@ -429,8 +432,10 @@ def test_run_keeps_subtitle_when_ffsubsync_fails(tmp_path, monkeypatch, mocker):
 
     def fake_find(video_path, language, credentials):
         downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\nhi\n")
-        return downloaded_path, SubtitleInfo(
-            provider="opensubtitles", match_type="hash", needs_sync=True
+        return (
+            downloaded_path,
+            SubtitleInfo(provider="opensubtitles", match_type="hash", needs_sync=True),
+            None,
         )
 
     mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
@@ -531,7 +536,7 @@ def test_needs_sync_false_when_hash_match(tmp_path, stub_subliminal, mocker):
         return_value=971,
     )
 
-    _, info = find_and_download_subtitle(
+    _, info, _ = find_and_download_subtitle(
         video_path,
         language=Language("por", country="BR"),
         credentials=("u", "p"),
@@ -551,7 +556,7 @@ def test_needs_sync_false_when_release_group_match(tmp_path, stub_subliminal, mo
         return_value=612,
     )
 
-    _, info = find_and_download_subtitle(
+    _, info, _ = find_and_download_subtitle(
         video_path,
         language=Language("por", country="BR"),
         credentials=("u", "p"),
@@ -571,7 +576,7 @@ def test_needs_sync_true_when_fallback_match(tmp_path, stub_subliminal, mocker):
         return_value=162,
     )
 
-    _, info = find_and_download_subtitle(
+    _, info, _ = find_and_download_subtitle(
         video_path,
         language=Language("por", country="BR"),
         credentials=("u", "p"),
@@ -596,8 +601,10 @@ def test_run_skips_sync_when_needs_sync_false(tmp_path, monkeypatch, mocker):
 
     def fake_find(video_path, language, credentials):
         downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
-        return downloaded_path, SubtitleInfo(
-            provider="opensubtitles", match_type="hash", needs_sync=False
+        return (
+            downloaded_path,
+            SubtitleInfo(provider="opensubtitles", match_type="hash", needs_sync=False),
+            None,
         )
 
     mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
@@ -626,8 +633,10 @@ def test_run_calls_sync_when_needs_sync_true(tmp_path, monkeypatch, mocker):
 
     def fake_find(video_path, language, credentials):
         downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
-        return downloaded_path, SubtitleInfo(
-            provider="opensubtitles", match_type="fallback", needs_sync=True
+        return (
+            downloaded_path,
+            SubtitleInfo(provider="opensubtitles", match_type="fallback", needs_sync=True),
+            None,
         )
 
     mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
@@ -640,3 +649,94 @@ def test_run_calls_sync_when_needs_sync_true(tmp_path, monkeypatch, mocker):
 
     mock_sync.assert_called_once()
     assert summary.synced is True
+
+
+def test_find_and_download_subtitle_returns_ref_path_when_en_available(
+    tmp_path, stub_subliminal, mocker
+):
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+    stub_subliminal.get_matches.return_value = {"title"}
+    mocker.patch("subs_down_n_sync.core.compute_score", return_value=100)
+
+    fake_ref_sub = mocker.MagicMock()
+    fake_ref_sub.provider_name = "opensubtitles"
+    fake_ref_sub.get_path.return_value = "Filme.en.srt"
+    fake_ref_sub.text = "1\n00:00:01,000 --> 00:00:02,000\nhi\n"
+    fake_ref_sub.get_matches.return_value = {"title"}
+    fake_ref_sub.language = Language("eng")
+
+    stub_subliminal.language = Language("por", country="BR")
+
+    en_lang = Language("eng")
+
+    def list_subtitles_side_effect(videos, languages, **kwargs):
+        video = list(videos)[0]
+        result = {video: []}
+        for lang in languages:
+            if lang == en_lang:
+                result[video].append(fake_ref_sub)
+            else:
+                result[video].append(stub_subliminal)
+        return result
+
+    mocker.patch(
+        "subs_down_n_sync.core.subliminal.list_subtitles",
+        side_effect=list_subtitles_side_effect,
+    )
+
+    srt_path, info, ref_path = find_and_download_subtitle(
+        video_path,
+        language=Language("por", country="BR"),
+        credentials=("u", "p"),
+    )
+
+    assert ref_path is not None
+    assert ref_path.suffix == ".srt"
+    assert ref_path.exists()
+
+
+def test_find_and_download_subtitle_ref_path_none_when_target_is_en(
+    tmp_path, stub_subliminal, mocker
+):
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+    stub_subliminal.get_matches.return_value = {"title"}
+    stub_subliminal.language = Language("eng")
+    mocker.patch("subs_down_n_sync.core.compute_score", return_value=100)
+
+    srt_path, info, ref_path = find_and_download_subtitle(
+        video_path,
+        language=Language("eng"),
+        credentials=("u", "p"),
+    )
+
+    assert ref_path is None
+
+
+def test_find_and_download_subtitle_ref_path_none_when_en_not_available(
+    tmp_path, stub_subliminal, mocker
+):
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+    stub_subliminal.get_matches.return_value = {"title"}
+    stub_subliminal.language = Language("por", country="BR")
+    mocker.patch("subs_down_n_sync.core.compute_score", return_value=100)
+
+    def list_subtitles_side_effect(videos, languages, **kwargs):
+        video = list(videos)[0]
+        result = {video: [stub_subliminal]}  # só pt-BR, sem en
+        return result
+
+    mocker.patch(
+        "subs_down_n_sync.core.subliminal.list_subtitles",
+        side_effect=list_subtitles_side_effect,
+    )
+
+    srt_path, info, ref_path = find_and_download_subtitle(
+        video_path,
+        language=Language("por", country="BR"),
+        credentials=("u", "p"),
+    )
+
+    assert ref_path is None

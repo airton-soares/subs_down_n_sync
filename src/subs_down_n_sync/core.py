@@ -169,32 +169,43 @@ def find_and_download_subtitle(
     video_path: Path,
     language: Language,
     credentials: tuple[str, str],
-) -> tuple[Path, SubtitleInfo]:
+) -> tuple[Path, SubtitleInfo, Path | None]:
     user, pwd = credentials
     video = subliminal.scan_video(str(video_path))
     provider_configs = {
         "opensubtitles": {"username": user, "password": pwd},
     }
+    en_lang = Language("eng")
+    needs_ref = language != en_lang
+
+    languages_to_fetch = {language, en_lang} if needs_ref else {language}
 
     results = subliminal.list_subtitles(
         {video},
-        {language},
+        languages_to_fetch,
         providers=["opensubtitles"],
         provider_configs=provider_configs,
     )
     candidates = results.get(video, [])
 
-    if not candidates:
+    target_candidates = [s for s in candidates if getattr(s, "language", None) == language]
+    if not target_candidates:
         raise SubtitleNotFoundError(
             f"Nenhuma legenda em {language.alpha3} encontrada para: {video_path.name}"
         )
 
-    subtitle, match_type, needs_sync = _pick_subtitle(candidates, video)
+    subtitle, match_type, needs_sync = _pick_subtitle(target_candidates, video)
 
-    subliminal.download_subtitles(
-        [subtitle],
-        provider_configs=provider_configs,
+    ref_candidates = (
+        [s for s in candidates if getattr(s, "language", None) == en_lang] if needs_ref else []
     )
+    ref_subtitle = ref_candidates[0] if ref_candidates else None
+
+    to_download = [subtitle]
+    if ref_subtitle is not None:
+        to_download.append(ref_subtitle)
+
+    subliminal.download_subtitles(to_download, provider_configs=provider_configs)
 
     # Não usamos subliminal.save_subtitles porque ele grava os bytes crus no
     # encoding detectado (ex.: cp1252), produzindo mojibake. Pegamos o texto
@@ -205,13 +216,18 @@ def find_and_download_subtitle(
     srt_path = video_path.parent / Path(subtitle.get_path(video)).name
     srt_path.write_text(subtitle.text, encoding="utf-8")
 
+    ref_path: Path | None = None
+    if ref_subtitle is not None and ref_subtitle.text:
+        ref_path = video_path.parent / Path(ref_subtitle.get_path(video)).name
+        ref_path.write_text(ref_subtitle.text, encoding="utf-8")
+
     info = SubtitleInfo(
         provider=subtitle.provider_name,
         match_type=match_type,
         needs_sync=needs_sync,
     )
 
-    return srt_path, info
+    return srt_path, info, ref_path
 
 
 def _parse_srt_timestamps(srt_text: str) -> list[float]:
@@ -292,7 +308,7 @@ def run(video_arg: str, lang_tag: str = DEFAULT_LANG) -> RunSummary:
     language = parse_language(lang_tag)
     credentials = load_credentials()
 
-    srt_path, info = find_and_download_subtitle(
+    srt_path, info, ref_path = find_and_download_subtitle(
         video_path, language=language, credentials=credentials
     )
 
