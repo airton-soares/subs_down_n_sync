@@ -207,9 +207,9 @@ def find_and_download_subtitle(
     # dessincronizada como referência piora o resultado do alass.
     ref_subtitle = None
     if ref_candidates:
-        _, _, ref_needs_sync = _pick_subtitle(ref_candidates, video)
+        best_ref, _, ref_needs_sync = _pick_subtitle(ref_candidates, video)
         if not ref_needs_sync:
-            ref_subtitle = ref_candidates[0]
+            ref_subtitle = best_ref
 
     to_download = [subtitle]
     if ref_subtitle is not None:
