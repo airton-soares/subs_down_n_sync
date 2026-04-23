@@ -12,6 +12,7 @@ from subs_down_n_sync.core import (
     SyncResult,
     _mean_offset_seconds,
     _parse_srt_timestamps,
+    align_subtitle_to_reference,
     check_alass,
     check_ffmpeg,
     finalize_output_path,
@@ -676,29 +677,26 @@ def test_find_and_download_subtitle_ref_path_none_when_target_is_en(
     assert ref_path is None
 
 
-def test_sync_subtitle_uses_ref_srt_when_available(tmp_path, mocker):
+def test_sync_subtitle_uses_align_when_ref_available(tmp_path):
+    """Com ref_path: aplica align_subtitle_to_reference sem chamar alass."""
     video = tmp_path / "Filme.mkv"
     video.write_bytes(b"\x00" * 10)
+
+    # ref começa em 74s, pt começa em 2s → shift de ~72s
+    ref_text = "1\n00:01:14,000 --> 00:01:16,000\nhi\n"
     srt = tmp_path / "Filme.pt-BR.srt"
-    shutil_.copy(FIXTURE, srt)
+    srt.write_text("1\n00:00:02,000 --> 00:00:04,000\noi\n")
+
     ref = tmp_path / "Filme.en.srt"
-    shutil_.copy(FIXTURE, ref)
-
-    synced_text = "1\n00:00:03,000 --> 00:00:04,000\nlinha 1\n"
-
-    def fake_run(cmd, capture_output, text, check):
-        assert str(ref) == cmd[1]  # referência é segundo argumento
-        assert str(srt) == cmd[2]  # alvo é terceiro
-        Path(cmd[3]).write_text(synced_text)
-        return mocker.MagicMock(returncode=0, stdout="", stderr="")
-
-    mocker.patch("subprocess.run", side_effect=fake_run)
+    ref.write_text(ref_text)
 
     result = sync_subtitle(video, srt, ref_path=ref)
 
     assert result.synced is True
     assert result.sync_mode == "ref"
-    assert srt.read_text() == synced_text
+    # primeiro timestamp deve estar próximo de 74s
+    timestamps = _parse_srt_timestamps(srt.read_text())
+    assert abs(timestamps[0] - 74.0) < 1.0
 
 
 def test_sync_subtitle_uses_video_when_ref_not_available(tmp_path, mocker):
@@ -866,3 +864,92 @@ def test_run_deletes_ref_path_after_sync(tmp_path, monkeypatch, mocker):
     run(str(video), lang_tag="pt-BR")
 
     assert not ref_path.exists()
+
+
+# --- testes para align_subtitle_to_reference ---
+
+
+def test_align_subtitle_shifts_and_scales_timestamps():
+    """Shift + FPS scale aplicados corretamente."""
+    # ref começa em 74s, pt começa em 2.951s → shift = 74 - 2.951 = 71.049s
+    # FPS: pt em 25fps, ref em 23.976fps → scale = 23.976/25
+    ref_text = "1\n00:01:14,000 --> 00:01:16,000\nhi\n"
+    pt_text = "1\n00:00:02,951 --> 00:00:05,053\noi\n\n2\n00:00:05,054 --> 00:00:07,288\ndois\n"
+
+    result = align_subtitle_to_reference(pt_text, ref_text)
+
+    # primeiro cue deve começar perto de 74s
+    timestamps = _parse_srt_timestamps(result)
+    assert abs(timestamps[0] - 74.0) < 1.0
+
+
+def test_align_subtitle_returns_valid_srt():
+    """Output é SRT válido com timestamps positivos."""
+    ref_text = "1\n00:01:14,000 --> 00:01:16,000\nhi\n"
+    pt_text = "1\n00:00:02,951 --> 00:00:05,053\noi\n"
+
+    result = align_subtitle_to_reference(pt_text, ref_text)
+
+    assert "-->" in result
+    timestamps = _parse_srt_timestamps(result)
+    assert all(t >= 0 for t in timestamps)
+
+
+# --- testes para opensubtitlescom como provider ---
+
+
+def test_find_and_download_subtitle_uses_opensubtitlescom_when_api_key_set(
+    tmp_path, stub_subliminal, mocker, monkeypatch
+):
+    """OPENSUBTITLESCOM_API_KEY setada → opensubtitlescom incluído nos providers."""
+    monkeypatch.setenv("OPENSUBTITLESCOM_API_KEY", "test-api-key")
+
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+    stub_subliminal.get_matches.return_value = {"title"}
+
+    captured_providers = []
+
+    def capture_list(videos, languages, *, providers=None, **kwargs):
+        captured_providers.extend(providers or [])
+        video = list(videos)[0]
+        return {video: [stub_subliminal]}
+
+    mocker.patch("subs_down_n_sync.core.subliminal.list_subtitles", side_effect=capture_list)
+
+    find_and_download_subtitle(
+        video_path,
+        language=Language("por", country="BR"),
+        credentials=("u", "p"),
+    )
+
+    assert "opensubtitlescom" in captured_providers
+
+
+def test_find_and_download_subtitle_omits_opensubtitlescom_when_no_api_key(
+    tmp_path, stub_subliminal, mocker, monkeypatch
+):
+    """OPENSUBTITLESCOM_API_KEY ausente → só opensubtitles."""
+    monkeypatch.delenv("OPENSUBTITLESCOM_API_KEY", raising=False)
+
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+    stub_subliminal.get_matches.return_value = {"title"}
+
+    captured_providers = []
+
+    def capture_list(videos, languages, *, providers=None, **kwargs):
+        captured_providers.extend(providers or [])
+        video = list(videos)[0]
+        return {video: [stub_subliminal]}
+
+    mocker.patch("subs_down_n_sync.core.subliminal.list_subtitles", side_effect=capture_list)
+
+    find_and_download_subtitle(
+        video_path,
+        language=Language("por", country="BR"),
+        credentials=("u", "p"),
+    )
+
+    assert "opensubtitlescom" not in captured_providers
+    assert "opensubtitles" in captured_providers

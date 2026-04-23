@@ -46,6 +46,14 @@ _TS_RE = re.compile(
     re.MULTILINE,
 )
 
+# Captura linha completa de timestamps: start --> end
+_TS_LINE_RE = re.compile(
+    r"(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})",
+)
+
+# FPS padrões conhecidos usados em legendas
+_COMMON_FPS = [23.976, 24.0, 25.0, 29.97, 30.0]
+
 
 @dataclass(frozen=True)
 class SyncResult:
@@ -176,9 +184,19 @@ def find_and_download_subtitle(
     user, pwd = credentials
     video = subliminal.scan_video(str(video_path))
     hash_refine(video)
-    provider_configs = {
-        "opensubtitles": {"username": user, "password": pwd},
-    }
+
+    providers = ["opensubtitles"]
+    provider_configs: dict = {"opensubtitles": {"username": user, "password": pwd}}
+
+    oscom_key = os.environ.get("OPENSUBTITLESCOM_API_KEY")
+    if oscom_key:
+        providers.append("opensubtitlescom")
+        provider_configs["opensubtitlescom"] = {
+            "username": user,
+            "password": pwd,
+            "apikey": oscom_key,
+        }
+
     en_lang = Language("eng")
     needs_ref = language != en_lang
 
@@ -187,7 +205,7 @@ def find_and_download_subtitle(
     results = subliminal.list_subtitles(
         {video},
         languages_to_fetch,
-        providers=["opensubtitles"],
+        providers=providers,
         provider_configs=provider_configs,
     )
     candidates = results.get(video, [])
@@ -260,40 +278,124 @@ def _mean_offset_seconds(orig: list[float], synced: list[float]) -> float:
     return total / n
 
 
+def _ts_to_seconds(h: str, m: str, s: str, ms: str) -> float:
+    return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
+
+
+def _seconds_to_ts(t: float) -> str:
+    t = max(0.0, t)
+    h = int(t // 3600)
+    m = int((t % 3600) // 60)
+    s = int(t % 60)
+    ms = round((t - int(t)) * 1000)
+    if ms == 1000:
+        s += 1
+        ms = 0
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def _detect_fps_ratio(srt_text: str, ref_text: str) -> float:
+    """Estima ratio FPS comparando duração total dos cues."""
+
+    def total_duration(text: str) -> float:
+        matches = _TS_LINE_RE.findall(text)
+        if not matches:
+            return 0.0
+        last = matches[-1]
+        return _ts_to_seconds(*last[4:8])
+
+    dur_target = total_duration(srt_text)
+    dur_ref = total_duration(ref_text)
+
+    if dur_target < 1.0 or dur_ref < 1.0:
+        return 1.0
+
+    raw_ratio = dur_ref / dur_target
+
+    # Snap para ratio de FPS conhecido mais próximo
+    best = 1.0
+    best_dist = float("inf")
+    for fps_ref in _COMMON_FPS:
+        for fps_target in _COMMON_FPS:
+            r = fps_ref / fps_target
+            dist = abs(r - raw_ratio)
+            if dist < best_dist:
+                best_dist = dist
+                best = r
+
+    # Só aplica se o ratio for significativamente diferente de 1.0
+    if abs(best - 1.0) < 0.001:
+        return 1.0
+
+    return best
+
+
+def align_subtitle_to_reference(srt_text: str, ref_text: str) -> str:
+    """Alinha legenda à referência: aplica shift temporal + correção de FPS.
+
+    Shift = primeiro timestamp da ref - primeiro timestamp da legenda alvo.
+    FPS ratio = duração total ref / duração total alvo (snapped para pares conhecidos).
+    """
+    ref_starts = _parse_srt_timestamps(ref_text)
+    target_starts = _parse_srt_timestamps(srt_text)
+
+    if not ref_starts or not target_starts:
+        return srt_text
+
+    shift = ref_starts[0] - target_starts[0]
+    fps_ratio = _detect_fps_ratio(srt_text, ref_text)
+
+    def replace_ts(m: re.Match) -> str:
+        t_start = _ts_to_seconds(m.group(1), m.group(2), m.group(3), m.group(4))
+        t_end = _ts_to_seconds(m.group(5), m.group(6), m.group(7), m.group(8))
+        new_start = t_start * fps_ratio + shift
+        new_end = t_end * fps_ratio + shift
+        return f"{_seconds_to_ts(new_start)} --> {_seconds_to_ts(new_end)}"
+
+    return _TS_LINE_RE.sub(replace_ts, srt_text)
+
+
 def sync_subtitle(
     video_path: Path,
     srt_path: Path,
     ref_path: Path | None,
 ) -> SyncResult:
-    synced_path = srt_path.with_suffix(".synced.srt")
-    reference = str(ref_path) if ref_path is not None else str(video_path)
-    sync_mode = "ref" if ref_path is not None else "video"
+    orig_text = srt_path.read_text(encoding="utf-8", errors="replace")
+    orig_ts = _parse_srt_timestamps(orig_text)
 
-    cmd = ["alass", reference, str(srt_path), str(synced_path)]
+    if ref_path is not None:
+        ref_text = ref_path.read_text(encoding="utf-8", errors="replace")
+        synced_text = align_subtitle_to_reference(orig_text, ref_text)
+        sync_mode = "ref"
+    else:
+        synced_path = srt_path.with_suffix(".synced.srt")
+        cmd = ["alass", str(video_path), str(srt_path), str(synced_path)]
 
-    try:
-        subprocess.run(cmd, capture_output=True, text=True, check=True)
-    except subprocess.CalledProcessError as e:
-        raise SubtitleSyncError(
-            f"alass falhou (exit {e.returncode}): {e.stderr or e.stdout or '<sem saída>'}"
-        ) from e
-    except FileNotFoundError as e:
-        raise SubtitleSyncError(
-            "alass não encontrado no PATH. Baixe em https://github.com/kaegi/alass/releases"
-        ) from e
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, check=True)
+        except subprocess.CalledProcessError as e:
+            raise SubtitleSyncError(
+                f"alass falhou (exit {e.returncode}): {e.stderr or e.stdout or '<sem saída>'}"
+            ) from e
+        except FileNotFoundError as e:
+            raise SubtitleSyncError(
+                "alass não encontrado no PATH. Baixe em https://github.com/kaegi/alass/releases"
+            ) from e
 
-    if not synced_path.exists():
-        raise SubtitleSyncError("alass terminou sem criar o arquivo de saída.")
+        if not synced_path.exists():
+            raise SubtitleSyncError("alass terminou sem criar o arquivo de saída.")
 
-    orig_ts = _parse_srt_timestamps(srt_path.read_text(encoding="utf-8", errors="replace"))
-    sync_ts = _parse_srt_timestamps(synced_path.read_text(encoding="utf-8", errors="replace"))
+        synced_text = synced_path.read_text(encoding="utf-8", errors="replace")
+        synced_path.unlink(missing_ok=True)
+        sync_mode = "video"
+
+    sync_ts = _parse_srt_timestamps(synced_text)
     offset = _mean_offset_seconds(orig_ts, sync_ts)
 
     if offset < SYNC_THRESHOLD_SECONDS:
-        synced_path.unlink(missing_ok=True)
         return SyncResult(synced=False, offset_seconds=offset, sync_mode="none")
 
-    synced_path.replace(srt_path)
+    srt_path.write_text(synced_text, encoding="utf-8")
     return SyncResult(synced=True, offset_seconds=offset, sync_mode=sync_mode)
 
 
