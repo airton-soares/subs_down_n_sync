@@ -19,16 +19,20 @@ def _make_cues(pairs: list[tuple[float, float, str]]) -> list[dict]:
 
 def test_align_cues_by_semantics_real_model_1to1():
     """Modelo real deve alinhar cues semanticamente equivalentes EN→pt-BR."""
-    ref_cues = _make_cues([
-        (1.0, 3.0, "Hello, how are you?"),
-        (5.0, 7.0, "I am fine, thank you."),
-        (10.0, 12.0, "See you tomorrow."),
-    ])
-    target_cues = _make_cues([
-        (0.5, 2.5, "Olá, como vai você?"),
-        (4.5, 6.5, "Estou bem, obrigado."),
-        (9.5, 11.5, "Até amanhã."),
-    ])
+    ref_cues = _make_cues(
+        [
+            (1.0, 3.0, "Hello, how are you?"),
+            (5.0, 7.0, "I am fine, thank you."),
+            (10.0, 12.0, "See you tomorrow."),
+        ]
+    )
+    target_cues = _make_cues(
+        [
+            (0.5, 2.5, "Olá, como vai você?"),
+            (4.5, 6.5, "Estou bem, obrigado."),
+            (9.5, 11.5, "Até amanhã."),
+        ]
+    )
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -45,16 +49,20 @@ def test_align_cues_by_semantics_real_model_1to1():
 
 def test_align_cues_by_semantics_preserves_monotonic_order_real_model():
     """Timestamps resultantes devem ser monotonicamente crescentes com modelo real."""
-    ref_cues = _make_cues([
-        (2.0, 4.0, "First line of dialogue."),
-        (6.0, 8.0, "Second line of dialogue."),
-        (12.0, 14.0, "Third line of dialogue."),
-    ])
-    target_cues = _make_cues([
-        (1.0, 3.0, "Primeira linha de diálogo."),
-        (5.0, 7.0, "Segunda linha de diálogo."),
-        (11.0, 13.0, "Terceira linha de diálogo."),
-    ])
+    ref_cues = _make_cues(
+        [
+            (2.0, 4.0, "First line of dialogue."),
+            (6.0, 8.0, "Second line of dialogue."),
+            (12.0, 14.0, "Third line of dialogue."),
+        ]
+    )
+    target_cues = _make_cues(
+        [
+            (1.0, 3.0, "Primeira linha de diálogo."),
+            (5.0, 7.0, "Segunda linha de diálogo."),
+            (11.0, 13.0, "Terceira linha de diálogo."),
+        ]
+    )
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
