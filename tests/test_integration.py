@@ -1,115 +1,91 @@
-"""Testes de integração: exercitam stable-ts com vídeo real baixado do Blender.
+"""Testes de integração: exercitam sentence-transformers com legendas reais.
 
-Camada A da estratégia de testes. Rodar com:
+Rodar com:
     pytest -m integration
-
-Download único e cacheado em tests/fixtures/.cache/.
 """
 
 from __future__ import annotations
 
-import random
-import shutil
-import urllib.error
-import urllib.request
-from pathlib import Path
-
 import pytest
 
-from subs_down_n_sync.core import SYNC_THRESHOLD_SECONDS, sync_subtitle
-from subs_down_n_sync.exceptions import SubtitleSyncError
+from subs_down_n_sync.core import SYNC_THRESHOLD_SECONDS, _align_cues_by_semantics, sync_subtitle
 
 pytestmark = pytest.mark.integration
 
-SINTEL_TRAILER_URL = "https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4"
-CACHE_DIR = Path(__file__).parent / "fixtures" / ".cache"
-VIDEO_CACHE = CACHE_DIR / "sintel_trailer-480p.mp4"
+
+def _make_cues(pairs: list[tuple[float, float, str]]) -> list[dict]:
+    return [{"start": s, "end": e, "text": t} for s, e, t in pairs]
 
 
-def _have(binary: str) -> bool:
-    return shutil.which(binary) is not None
+def test_align_cues_by_semantics_real_model_1to1():
+    """Modelo real deve alinhar cues semanticamente equivalentes EN→pt-BR."""
+    ref_cues = _make_cues([
+        (1.0, 3.0, "Hello, how are you?"),
+        (5.0, 7.0, "I am fine, thank you."),
+        (10.0, 12.0, "See you tomorrow."),
+    ])
+    target_cues = _make_cues([
+        (0.5, 2.5, "Olá, como vai você?"),
+        (4.5, 6.5, "Estou bem, obrigado."),
+        (9.5, 11.5, "Até amanhã."),
+    ])
+
+    result = _align_cues_by_semantics(target_cues, ref_cues)
+
+    assert len(result) == 3
+    # timestamps devem ser os da referência EN
+    assert result[0]["start"] == pytest.approx(1.0, abs=0.5)
+    assert result[1]["start"] == pytest.approx(5.0, abs=0.5)
+    assert result[2]["start"] == pytest.approx(10.0, abs=0.5)
+    # textos originais pt-BR preservados
+    assert result[0]["text"] == "Olá, como vai você?"
+    assert result[1]["text"] == "Estou bem, obrigado."
+    assert result[2]["text"] == "Até amanhã."
 
 
-def _fmt_ts(seconds: float) -> str:
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = int(seconds % 60)
-    ms = round((seconds - int(seconds)) * 1000)
+def test_align_cues_by_semantics_preserves_monotonic_order_real_model():
+    """Timestamps resultantes devem ser monotonicamente crescentes com modelo real."""
+    ref_cues = _make_cues([
+        (2.0, 4.0, "First line of dialogue."),
+        (6.0, 8.0, "Second line of dialogue."),
+        (12.0, 14.0, "Third line of dialogue."),
+    ])
+    target_cues = _make_cues([
+        (1.0, 3.0, "Primeira linha de diálogo."),
+        (5.0, 7.0, "Segunda linha de diálogo."),
+        (11.0, 13.0, "Terceira linha de diálogo."),
+    ])
 
-    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+    result = _align_cues_by_semantics(target_cues, ref_cues)
 
-
-def _make_srt(cues: list[tuple[float, float, str]]) -> str:
-    """Gera texto SRT a partir de lista de (start_s, end_s, texto)."""
-    lines: list[str] = []
-
-    for i, (start, end, text) in enumerate(cues, start=1):
-        lines.append(str(i))
-        lines.append(f"{_fmt_ts(start)} --> {_fmt_ts(end)}")
-        lines.append(text)
-        lines.append("")
-
-    return "\n".join(lines)
+    starts = [c["start"] for c in result]
+    assert starts == sorted(starts), f"timestamps não monotônicos: {starts}"
 
 
-@pytest.fixture(scope="session")
-def sintel_trailer() -> Path:
-    if not _have("ffmpeg"):
-        pytest.skip("ffmpeg não instalado")
-
-    if VIDEO_CACHE.exists():
-        return VIDEO_CACHE
-
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-    # User-Agent explícito: servidor do Blender/Cloudflare retorna 403 para "Python-urllib/*".
-    request = urllib.request.Request(
-        SINTEL_TRAILER_URL,
-        headers={"User-Agent": "subs_down_n_sync-tests/1.0"},
+def test_sync_subtitle_real_model(tmp_path):
+    """sync_subtitle com modelo real deve detectar dessincronia e corrigir."""
+    ref = tmp_path / "ref.en.srt"
+    ref.write_text(
+        "1\n00:00:03,000 --> 00:00:05,000\nHello, how are you?\n\n"
+        "2\n00:00:08,000 --> 00:00:10,000\nI am fine, thank you.\n",
+        encoding="utf-8",
     )
 
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            VIDEO_CACHE.write_bytes(response.read())
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        pytest.skip(f"não foi possível baixar fixture de vídeo: {e}")
+    srt = tmp_path / "target.pt-BR.srt"
+    srt.write_text(
+        "1\n00:00:01,000 --> 00:00:03,000\nOlá, como vai você?\n\n"
+        "2\n00:00:06,000 --> 00:00:08,000\nEstou bem, obrigado.\n",
+        encoding="utf-8",
+    )
 
-    return VIDEO_CACHE
-
-
-def test_stable_ts_detects_random_per_cue_shift_and_replaces_original(sintel_trailer, tmp_path):
-    """stable-ts deve detectar dessincronia aleatória por cue (0–2s) e substituir o SRT."""
-    rng = random.Random(42)
-    base_cues = [(5.0, 7.0, "cue 1"), (15.0, 17.0, "cue 2"), (30.0, 32.0, "cue 3")]
-    shifted_cues = [
-        (start + rng.uniform(0.0, 2.0), end + rng.uniform(0.0, 2.0), text)
-        for start, end, text in base_cues
-    ]
-
-    srt_path = tmp_path / "sintel_trailer-480p.pt-BR.srt"
-    srt_path.write_text(_make_srt(shifted_cues), encoding="utf-8")
-    original_content = srt_path.read_text(encoding="utf-8")
-
-    result = sync_subtitle(sintel_trailer, srt_path)
+    result = sync_subtitle(srt, ref_path=ref)
 
     assert result.synced is True, (
-        f"stable-ts deveria detectar os shifts aleatórios como acima do limiar "
-        f"{SYNC_THRESHOLD_SECONDS}s, mas offset medido foi {result.offset_seconds:.3f}s"
+        f"esperava sync=True (offset ≥ {SYNC_THRESHOLD_SECONDS}s), "
+        f"obtido offset={result.offset_seconds:.3f}s"
     )
-    assert result.offset_seconds >= 0.1, (
-        f"offset esperado >= 0.1s, obtido {result.offset_seconds:.3f}s"
-    )
-    assert srt_path.exists()
-    assert srt_path.read_text(encoding="utf-8") != original_content
+    assert result.offset_seconds >= SYNC_THRESHOLD_SECONDS
+    assert result.sync_mode == "ref"
 
-
-def test_stable_ts_fails_cleanly_on_bad_video(tmp_path):
-    """stable-ts deve falhar com SubtitleSyncError ao receber vídeo corrompido."""
-    bogus_video = tmp_path / "bogus.mkv"
-    bogus_video.write_bytes(b"\x00\x01\x02\x03")
-
-    srt_path = tmp_path / "bogus.pt-BR.srt"
-    srt_path.write_text(_make_srt([(1.0, 2.0, "teste")]), encoding="utf-8")
-
-    with pytest.raises(SubtitleSyncError):
-        sync_subtitle(bogus_video, srt_path)
+    synced_text = srt.read_text(encoding="utf-8")
+    assert "00:00:03" in synced_text or "00:00:08" in synced_text
