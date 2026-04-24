@@ -390,19 +390,36 @@ def _align_cues_by_semantics(
     result = []
     for ti, cue in enumerate(target_cues):
         mapped = target_to_refs.get(ti, [])
+        orig_duration = max(cue["end"] - cue["start"], 0.0)
+
         if mapped:
-            start = float(np.mean([ref_cues[ri]["start"] for ri in mapped]))
-            end = float(np.mean([ref_cues[ri]["end"] for ri in mapped]))
+            # usa start do primeiro ref mapeado (não média, evita puxar p/ meio)
+            start = float(ref_cues[mapped[0]]["start"])
+            # preserva duração original do target (frase pt pode ser mais longa que en)
+            end = start + orig_duration
         else:
             start, end = cue["start"], cue["end"]
+
+        # duração mínima de leitura: ~60ms/char, mínimo 1s, teto 7s
+        min_duration = max(1.0, min(len(cue["text"]) * 0.06, 7.0))
+        if end - start < min_duration:
+            end = start + min_duration
+
         result.append({"start": start, "end": end, "text": cue["text"]})
 
-    # garante ordem monotônica
+    # garante ordem monotônica e clamp contra próximo cue
     for i in range(1, len(result)):
         if result[i]["start"] <= result[i - 1]["start"]:
-            gap = result[i - 1]["end"] - result[i - 1]["start"]
+            gap = max(result[i - 1]["end"] - result[i - 1]["start"], 0.1)
             result[i]["start"] = result[i - 1]["start"] + gap
-            result[i]["end"] = result[i]["start"] + (result[i]["end"] - result[i]["start"])
+            duration = result[i]["end"] - result[i]["start"]
+            result[i]["end"] = result[i]["start"] + max(duration, 0.1)
+
+    # clamp: end do cue i não invade start do cue i+1 (deixa 50ms de gap)
+    for i in range(len(result) - 1):
+        max_end = result[i + 1]["start"] - 0.05
+        if result[i]["end"] > max_end:
+            result[i]["end"] = max(max_end, result[i]["start"] + 0.1)
 
     return result
 

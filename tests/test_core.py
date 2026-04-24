@@ -734,6 +734,89 @@ def test_align_cues_by_semantics_simple_1to1(mocker):
     assert result[1]["text"] == "bom dia"
 
 
+def test_align_cues_by_semantics_preserves_target_duration(mocker):
+    """End-time deve respeitar duração do target, não copiar do ref (mais curto)."""
+    import numpy as np
+
+    ref_cues = [
+        {"start": 10.0, "end": 11.0, "text": "hi"},
+    ]
+    target_cues = [
+        {"start": 5.0, "end": 8.0, "text": "frase portuguesa mais longa"},
+    ]
+
+    fake_embeddings = {
+        "hi": np.array([1.0, 0.0]),
+        "frase portuguesa mais longa": np.array([0.99, 0.01]),
+    }
+
+    mock_model = mocker.MagicMock()
+    mock_model.encode.side_effect = lambda texts, **kw: np.array(
+        [fake_embeddings[t] for t in texts]
+    )
+    mocker.patch("subs_down_n_sync.core.SentenceTransformer", return_value=mock_model)
+
+    result = _align_cues_by_semantics(target_cues, ref_cues)
+
+    assert result[0]["start"] == pytest.approx(10.0)
+    assert result[0]["end"] == pytest.approx(13.0)
+
+
+def test_align_cues_by_semantics_enforces_min_reading_duration(mocker):
+    """Duração mínima de leitura aplicada se target original curto demais."""
+    import numpy as np
+
+    ref_cues = [
+        {"start": 10.0, "end": 10.2, "text": "hi"},
+    ]
+    target_cues = [
+        {"start": 5.0, "end": 5.2, "text": "uma frase bem grande que precisa de tempo"},
+    ]
+
+    fake_embeddings = {
+        "hi": np.array([1.0, 0.0]),
+        "uma frase bem grande que precisa de tempo": np.array([0.99, 0.01]),
+    }
+
+    mock_model = mocker.MagicMock()
+    mock_model.encode.side_effect = lambda texts, **kw: np.array(
+        [fake_embeddings[t] for t in texts]
+    )
+    mocker.patch("subs_down_n_sync.core.SentenceTransformer", return_value=mock_model)
+
+    result = _align_cues_by_semantics(target_cues, ref_cues)
+
+    duration = result[0]["end"] - result[0]["start"]
+    expected_min = len(target_cues[0]["text"]) * 0.06
+    assert duration >= expected_min
+
+
+def test_align_cues_by_semantics_clamps_end_to_next_start(mocker):
+    """End do cue i não deve invadir start do cue i+1 (mantém gap mínimo)."""
+    import numpy as np
+
+    ref_cues = [
+        {"start": 10.0, "end": 15.0, "text": "first"},
+        {"start": 11.0, "end": 12.0, "text": "second"},
+    ]
+    target_cues = [
+        {"start": 5.0, "end": 10.0, "text": "primeiro longo"},
+        {"start": 10.5, "end": 11.0, "text": "segundo"},
+    ]
+
+    def fake_encode(texts, **kw):
+        mapping = {"first": 0, "second": 1, "primeiro longo": 0, "segundo": 1}
+        return np.array([np.eye(2)[mapping[t]] for t in texts])
+
+    mock_model = mocker.MagicMock()
+    mock_model.encode.side_effect = fake_encode
+    mocker.patch("subs_down_n_sync.core.SentenceTransformer", return_value=mock_model)
+
+    result = _align_cues_by_semantics(target_cues, ref_cues)
+
+    assert result[0]["end"] < result[1]["start"], "end invade próximo start"
+
+
 def test_align_cues_by_semantics_preserves_order(mocker):
     """Timestamps resultantes devem ser monotonicamente crescentes."""
     import numpy as np
