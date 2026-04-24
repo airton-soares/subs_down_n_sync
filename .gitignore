@@ -8,3 +8,6 @@ coverage.xml
 htmlcov/
 *.srt.bak
 tests/fixtures/.cache/
+*.align_cache.json
+.ruff_cache/
+docs/superpowers/

@@ -8,7 +8,8 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "subliminal>=2.2",
-    "ffsubsync>=0.4.25",
+    "sentence-transformers>=3.0",
+    "scipy>=1.13",
     "setuptools<81",
 ]
 
@@ -27,7 +28,7 @@ dev = [
 where = ["src"]
 
 [tool.pytest.ini_options]
-markers = ["integration: testes que dependem de ffmpeg, ffsubsync e rede"]
+markers = ["integration: testes que dependem de ffmpeg, stable-ts e rede"]
 addopts = "-m 'not integration' --cov=src/subs_down_n_sync --cov-report=term-missing --cov-fail-under=90"
 
 [tool.ruff]

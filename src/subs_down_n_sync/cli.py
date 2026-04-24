@@ -16,7 +16,9 @@ def _print_summary(summary: RunSummary) -> None:
             f"Detalhe: {summary.sync_error}"
         )
     elif summary.synced:
-        print(f"Sincronizada (ajuste médio: {summary.offset_seconds:.2f}s)")
+        print(
+            f"Sincronizada (ajuste médio: {summary.offset_seconds:.2f}s, modo: {summary.sync_mode})"
+        )
     else:
         print(f"Já sincronizada (offset médio: {summary.offset_seconds:.2f}s < 0.10s)")
 

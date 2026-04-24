@@ -4,6 +4,8 @@
 
 Python CLI for downloading and synchronizing subtitles for video files. Default language: **pt-BR**, configurable via `--lang` flag (any BCP 47 tag).
 
+Synchronization uses the Whisper tiny model via [stable-ts](https://github.com/jianfch/stable-ts): aligns subtitle timestamps to the video's audio. Subtitles with an exact match (hash or release group) are used without synchronization.
+
 ## Setup
 
 ```bash
@@ -12,7 +14,7 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Also install `ffmpeg` on your system (used by `ffsubsync`):
+Also install `ffmpeg` on your system:
 
 ```bash
 sudo apt install ffmpeg    # Debian/Ubuntu
@@ -74,14 +76,14 @@ CI fails if `ruff format --check` or `ruff check` find any issues.
 
 The project has two test layers:
 
-- **Unit tests** (default, `pytest`) — fast, mock `subliminal` and `ffsubsync`. No network or external binaries required beyond Python.
-- **Integration tests** (`pytest -m integration`) — exercise real `ffsubsync` with the Sintel trailer (Blender Foundation, Creative Commons). The video is downloaded automatically on first run and cached in `tests/fixtures/.cache/`. Requires `ffmpeg` and `ffsubsync` in PATH and internet access on first run.
+- **Unit tests** (default, `pytest`) — fast, mock `subliminal` and `stable_whisper`. No network or external binaries required beyond Python.
+- **Integration tests** (`pytest -m integration`) — exercise real `stable-ts` with the Sintel trailer (Blender Foundation, Creative Commons). The video is downloaded automatically on first run and cached in `tests/fixtures/.cache/`. Requires `ffmpeg` in PATH and internet access on first run.
 
 How to run each layer:
 
 ```bash
 pytest                    # unit only (fast)
-pytest -m integration     # integration only (downloads ~4 MB video, runs real ffsubsync)
+pytest -m integration     # integration only (downloads ~4 MB video, runs real stable-ts)
 pytest -m ""              # everything (unit + integration)
 ```
 

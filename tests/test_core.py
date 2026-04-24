@@ -1,23 +1,26 @@
-import shutil as shutil_
 from pathlib import Path
 
 import pytest
 from babelfish import Language
+from subliminal.video import Episode
 
 from subs_down_n_sync.cli import main
 from subs_down_n_sync.core import (
     RunSummary,
     SubtitleInfo,
     SyncResult,
+    _align_cues_by_semantics,
+    _filename_similarity,
     _mean_offset_seconds,
     _parse_srt_timestamps,
     check_ffmpeg,
     finalize_output_path,
     find_and_download_subtitle,
+    find_reference_subtitle,
     load_credentials,
     parse_language,
     run,
-    sync_subtitle_if_needed,
+    sync_subtitle,
     validate_video_path,
 )
 from subs_down_n_sync.exceptions import (
@@ -64,7 +67,10 @@ def test_validate_video_path_raises_when_path_is_directory(tmp_path):
 
 
 def test_check_ffmpeg_passes_when_binary_found(mocker):
-    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+    mocker.patch(
+        "subs_down_n_sync.core.shutil.which",
+        side_effect=lambda name: f"/usr/bin/{name}",
+    )
     check_ffmpeg()  # não deve levantar
 
 
@@ -119,14 +125,22 @@ def test_parse_language_raises_when_invalid():
 
 @pytest.fixture
 def stub_subliminal(mocker):
-    """Stuba scan_video/download_best_subtitles.
+    """Stuba scan_video/list_subtitles/download_subtitles.
 
     Retorna o mock do subtitle para os testes configurarem `.get_matches`,
     `.provider_name` e `.text`. A escrita do .srt no disco fica a cargo do
     próprio `find_and_download_subtitle` (write_text em UTF-8), então o stub
     só precisa garantir que `subtitle.text` seja uma string válida.
     """
-    fake_video = mocker.MagicMock(name="Video")
+    fake_video = Episode(
+        "Raising.Hope.S01E01.720p.HDTV.X264",
+        "Raising Hope",
+        1,
+        1,
+        source="HDTV",
+        resolution="720p",
+        video_codec="H.264",
+    )
     mocker.patch("subs_down_n_sync.core.subliminal.scan_video", return_value=fake_video)
 
     fake_sub = mocker.MagicMock()
@@ -134,13 +148,33 @@ def stub_subliminal(mocker):
     fake_sub.get_path.return_value = "Filme.pt-BR.srt"
     fake_sub.text = "1\n00:00:01,000 --> 00:00:02,000\noi\n"
     fake_sub.get_matches.return_value = set()
+    fake_sub.language = Language("por", country="BR")
+    fake_sub.filename = "Filme.pt-BR.srt"
 
     mocker.patch(
-        "subs_down_n_sync.core.subliminal.download_best_subtitles",
+        "subs_down_n_sync.core.subliminal.list_subtitles",
         return_value={fake_video: [fake_sub]},
     )
+    mocker.patch("subs_down_n_sync.core.subliminal.download_subtitles")
 
     return fake_sub
+
+
+def test_find_and_download_subtitle_calls_hash_refiner(tmp_path, stub_subliminal, mocker):
+    """scan_video não computa hash automaticamente — hash_refine deve ser chamado."""
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+    stub_subliminal.get_matches.return_value = {"title"}
+
+    mock_refine = mocker.patch("subs_down_n_sync.core.hash_refine")
+
+    find_and_download_subtitle(
+        video_path,
+        language=Language("por", country="BR"),
+        credentials=("u", "p"),
+    )
+
+    mock_refine.assert_called_once()
 
 
 def test_find_and_download_subtitle_returns_path_and_info(tmp_path, stub_subliminal):
@@ -165,12 +199,13 @@ def test_find_and_download_subtitle_raises_when_no_results(tmp_path, mocker):
     video_path = tmp_path / "Filme.mkv"
     video_path.write_bytes(b"\x00" * 10)
 
-    fake_video = mocker.MagicMock()
+    fake_video = Episode("Filme.S01E01", "Filme", 1, 1)
     mocker.patch("subs_down_n_sync.core.subliminal.scan_video", return_value=fake_video)
     mocker.patch(
-        "subs_down_n_sync.core.subliminal.download_best_subtitles",
+        "subs_down_n_sync.core.subliminal.list_subtitles",
         return_value={fake_video: []},
     )
+    mocker.patch("subs_down_n_sync.core.subliminal.download_subtitles")
 
     with pytest.raises(SubtitleNotFoundError, match="eng"):
         find_and_download_subtitle(video_path, language=Language("eng"), credentials=("u", "p"))
@@ -241,68 +276,6 @@ def test_mean_offset_seconds_uses_min_length_when_sizes_differ():
     assert _mean_offset_seconds([1.0, 5.0, 10.0], [1.5, 5.5]) == pytest.approx(0.5)
 
 
-def test_sync_skips_replacement_when_offset_below_threshold(tmp_path, mocker):
-    video = tmp_path / "Filme.mkv"
-    video.write_bytes(b"\x00" * 10)
-    srt = tmp_path / "Filme.pt-BR.srt"
-    shutil_.copy(FIXTURE, srt)
-
-    def fake_run(cmd, capture_output, text, check):  # noqa: ARG001
-        out = Path([a for a in cmd if a.endswith(".sync.srt")][0])
-        out.write_text(
-            "1\n00:00:01,050 --> 00:00:02,050\nlinha 1\n\n"
-            "2\n00:00:05,050 --> 00:00:06,050\nlinha 2\n"
-        )
-        return mocker.MagicMock(returncode=0, stdout="", stderr="")
-
-    mocker.patch("subprocess.run", side_effect=fake_run)
-
-    result = sync_subtitle_if_needed(video, srt)
-    assert result == SyncResult(synced=False, offset_seconds=pytest.approx(0.05))
-    assert srt.read_text() == FIXTURE.read_text()
-
-
-def test_sync_replaces_original_when_offset_above_threshold(tmp_path, mocker):
-    video = tmp_path / "Filme.mkv"
-    video.write_bytes(b"\x00" * 10)
-    srt = tmp_path / "Filme.pt-BR.srt"
-    shutil_.copy(FIXTURE, srt)
-
-    synced_text = (
-        "1\n00:00:03,000 --> 00:00:04,000\nlinha 1\n\n2\n00:00:07,000 --> 00:00:08,000\nlinha 2\n"
-    )
-
-    def fake_run(cmd, capture_output, text, check):  # noqa: ARG001
-        out = Path([a for a in cmd if a.endswith(".sync.srt")][0])
-        out.write_text(synced_text)
-        return mocker.MagicMock(returncode=0, stdout="", stderr="")
-
-    mocker.patch("subprocess.run", side_effect=fake_run)
-
-    result = sync_subtitle_if_needed(video, srt)
-    assert result.synced is True
-    assert result.offset_seconds == pytest.approx(2.0)
-    assert srt.read_text() == synced_text
-
-
-def test_sync_raises_when_ffsubsync_fails(tmp_path, mocker):
-    import subprocess
-
-    video = tmp_path / "Filme.mkv"
-    video.write_bytes(b"\x00" * 10)
-    srt = tmp_path / "Filme.pt-BR.srt"
-    shutil_.copy(FIXTURE, srt)
-
-    mocker.patch(
-        "subprocess.run",
-        side_effect=subprocess.CalledProcessError(1, "ffsubsync", stderr="boom"),
-    )
-
-    with pytest.raises(SubtitleSyncError, match="ffsubsync"):
-        sync_subtitle_if_needed(video, srt)
-    assert srt.read_text() == FIXTURE.read_text()
-
-
 def test_finalize_output_path_renames_with_language_tag(tmp_path):
     video = tmp_path / "Filme.2024.mkv"
     srt = tmp_path / "Filme.2024.pt-BR.srt"
@@ -361,15 +334,20 @@ def test_run_full_pipeline_when_sync_needed(tmp_path, monkeypatch, mocker):
     video.write_bytes(b"\x00" * 10)
 
     downloaded_path = tmp_path / "Filme.pt-BR.srt"
+    ref_path = tmp_path / "Filme.en.srt"
 
     def fake_find(video_path, language, credentials):
         downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
-        return downloaded_path, SubtitleInfo(provider="opensubtitles", match_type="hash")
+        return (
+            downloaded_path,
+            SubtitleInfo(provider="opensubtitles", match_type="hash", needs_sync=True),
+        )
 
     mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
+    mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=ref_path)
     mocker.patch(
-        "subs_down_n_sync.core.sync_subtitle_if_needed",
-        return_value=SyncResult(synced=True, offset_seconds=1.25),
+        "subs_down_n_sync.core.sync_subtitle",
+        return_value=SyncResult(synced=True, offset_seconds=1.25, sync_mode="ref"),
     )
 
     summary = run(str(video), lang_tag="pt-BR")
@@ -383,7 +361,7 @@ def test_run_full_pipeline_when_sync_needed(tmp_path, monkeypatch, mocker):
     assert summary.lang_tag == "pt-BR"
 
 
-def test_run_keeps_subtitle_when_ffsubsync_fails(tmp_path, monkeypatch, mocker):
+def test_run_keeps_subtitle_when_sync_fails(tmp_path, monkeypatch, mocker):
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
@@ -392,14 +370,19 @@ def test_run_keeps_subtitle_when_ffsubsync_fails(tmp_path, monkeypatch, mocker):
     video.write_bytes(b"\x00" * 10)
 
     downloaded_path = tmp_path / "Filme.en.srt"
+    ref_path = tmp_path / "Filme.en.ref.srt"
 
     def fake_find(video_path, language, credentials):
         downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\nhi\n")
-        return downloaded_path, SubtitleInfo(provider="opensubtitles", match_type="hash")
+        return (
+            downloaded_path,
+            SubtitleInfo(provider="opensubtitles", match_type="hash", needs_sync=True),
+        )
 
     mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
+    mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=ref_path)
     mocker.patch(
-        "subs_down_n_sync.core.sync_subtitle_if_needed",
+        "subs_down_n_sync.core.sync_subtitle",
         side_effect=SubtitleSyncError("boom"),
     )
 
@@ -425,6 +408,7 @@ def test_main_success_prints_summary(tmp_path, monkeypatch, mocker, capsys):
         match_type="hash",
         synced=True,
         offset_seconds=0.42,
+        sync_mode="ref",
         sync_error=None,
         elapsed_seconds=1.23,
         lang_tag="pt-BR",
@@ -455,6 +439,7 @@ def test_main_lang_flag_uses_custom_language(tmp_path, monkeypatch, mocker):
         match_type="hash",
         synced=False,
         offset_seconds=0.0,
+        sync_mode="none",
         sync_error=None,
         elapsed_seconds=0.5,
         lang_tag="en",
@@ -473,3 +458,369 @@ def test_main_expected_error_returns_1(tmp_path, capsys):
     assert code == 1
     captured = capsys.readouterr()
     assert "não existe" in captured.err
+
+
+# --- testes para _filename_similarity ---
+
+
+def test_filename_similarity_exact_match():
+    score = _filename_similarity(
+        "Raising.Hope.S01E03.720p.HDTV.X264-MRSK.srt",
+        "Raising.Hope.S01E03.720p.HDTV.X264-MRSK.mkv",
+    )
+    assert score == pytest.approx(1.0)
+
+
+def test_filename_similarity_partial_match():
+    score = _filename_similarity(
+        "Raising.Hope.S01E03.720p.WEB-DL.DD5.1.H.264-NT.srt",
+        "Raising.Hope.S01E03.720p.HDTV.X264-MRSK.mkv",
+    )
+    assert 0.0 < score < 1.0
+
+
+def test_filename_similarity_no_match():
+    assert _filename_similarity(
+        "totally.different.srt", "Raising.Hope.S01E03.mkv"
+    ) == pytest.approx(0.0)
+
+
+def test_filename_similarity_prefers_closer_release(stub_subliminal):
+    """Legenda com tokens mais próximos do vídeo deve ter maior similaridade."""
+    score_close = _filename_similarity(
+        "Raising.Hope.S01E03.720p.HDTV.X264-MRSK.srt",
+        "Raising.Hope.S01E03.720p.HDTV.X264-MRSK.mkv",
+    )
+    score_far = _filename_similarity(
+        "Raising.Hope.S01E03.720p.WEB-DL.NT.srt",
+        "Raising.Hope.S01E03.720p.HDTV.X264-MRSK.mkv",
+    )
+    assert score_close > score_far
+
+
+# --- testes para lógica de needs_sync ---
+
+
+def test_needs_sync_false_when_hash_match(tmp_path, stub_subliminal, mocker):
+    """Hash match → needs_sync=False, sem chamar sync."""
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+    stub_subliminal.get_matches.return_value = {"hash"}
+
+    mocker.patch(
+        "subs_down_n_sync.core.compute_score",
+        return_value=971,
+    )
+
+    _, info = find_and_download_subtitle(
+        video_path,
+        language=Language("por", country="BR"),
+        credentials=("u", "p"),
+    )
+    assert info.needs_sync is False
+    assert info.match_type == "hash"
+
+
+def test_needs_sync_true_when_release_group_match(tmp_path, stub_subliminal, mocker):
+    """release_group match sem hash → needs_sync=True (sync via referência EN)."""
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+    stub_subliminal.get_matches.return_value = {"series", "season", "episode", "release_group"}
+    stub_subliminal.filename = "Filme.release_group.srt"
+
+    mocker.patch(
+        "subs_down_n_sync.core.compute_score",
+        return_value=612,
+    )
+
+    _, info = find_and_download_subtitle(
+        video_path,
+        language=Language("por", country="BR"),
+        credentials=("u", "p"),
+    )
+    assert info.needs_sync is True
+    assert info.match_type == "release"
+
+
+def test_needs_sync_true_when_fallback_match(tmp_path, stub_subliminal, mocker):
+    """Só title match → needs_sync=True."""
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+    stub_subliminal.get_matches.return_value = {"title"}
+
+    mocker.patch(
+        "subs_down_n_sync.core.compute_score",
+        return_value=162,
+    )
+
+    _, info = find_and_download_subtitle(
+        video_path,
+        language=Language("por", country="BR"),
+        credentials=("u", "p"),
+    )
+    assert info.needs_sync is True
+    assert info.match_type == "fallback"
+
+
+def test_run_skips_sync_when_needs_sync_false(tmp_path, monkeypatch, mocker):
+    """needs_sync=False → sync_subtitle_if_needed não é chamado."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+
+    downloaded_path = tmp_path / "Filme.pt-BR.srt"
+
+    def fake_find(video_path, language, credentials):
+        downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+        return (
+            downloaded_path,
+            SubtitleInfo(provider="opensubtitles", match_type="hash", needs_sync=False),
+        )
+
+    mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
+    mock_sync = mocker.patch("subs_down_n_sync.core.sync_subtitle")
+
+    summary = run(str(video), lang_tag="pt-BR")
+
+    mock_sync.assert_not_called()
+    assert summary.synced is False
+    assert summary.offset_seconds == 0.0
+
+
+def test_run_calls_sync_when_needs_sync_true(tmp_path, monkeypatch, mocker):
+    """needs_sync=True → find_reference_subtitle e sync_subtitle são chamados."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+
+    downloaded_path = tmp_path / "Filme.pt-BR.srt"
+    ref_path = tmp_path / "Filme.en.srt"
+
+    def fake_find(video_path, language, credentials):
+        downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+        return (
+            downloaded_path,
+            SubtitleInfo(provider="opensubtitles", match_type="fallback", needs_sync=True),
+        )
+
+    mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
+    mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=ref_path)
+    mock_sync = mocker.patch(
+        "subs_down_n_sync.core.sync_subtitle",
+        return_value=SyncResult(synced=True, offset_seconds=1.5),
+    )
+
+    summary = run(str(video), lang_tag="pt-BR")
+
+    mock_sync.assert_called_once()
+    assert summary.synced is True
+
+
+def test_run_skips_sync_when_no_reference_available(tmp_path, monkeypatch, mocker):
+    """needs_sync=True mas EN não disponível → sem sync, sem erro fatal."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+
+    downloaded_path = tmp_path / "Filme.pt-BR.srt"
+
+    def fake_find(video_path, language, credentials):
+        downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+        return (
+            downloaded_path,
+            SubtitleInfo(provider="opensubtitles", match_type="fallback", needs_sync=True),
+        )
+
+    mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
+    mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=None)
+    mock_sync = mocker.patch("subs_down_n_sync.core.sync_subtitle")
+
+    summary = run(str(video), lang_tag="pt-BR")
+
+    mock_sync.assert_not_called()
+    assert summary.synced is False
+    assert summary.sync_error is not None
+
+
+def test_find_reference_subtitle_returns_path_when_en_found(tmp_path, mocker):
+    """find_reference_subtitle retorna path quando EN disponível."""
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+
+    fake_video = Episode("Filme.S01E01", "Filme", 1, 1)
+    mocker.patch("subs_down_n_sync.core.subliminal.scan_video", return_value=fake_video)
+
+    fake_sub = mocker.MagicMock()
+    fake_sub.provider_name = "opensubtitles"
+    fake_sub.get_path.return_value = "Filme.en.srt"
+    fake_sub.text = "1\n00:00:01,000 --> 00:00:02,000\nhello\n"
+    fake_sub.get_matches.return_value = {"hash"}
+    fake_sub.language = Language("eng")
+
+    mocker.patch(
+        "subs_down_n_sync.core.subliminal.list_subtitles",
+        return_value={fake_video: [fake_sub]},
+    )
+    mocker.patch("subs_down_n_sync.core.subliminal.download_subtitles")
+    mocker.patch("subs_down_n_sync.core.hash_refine")
+
+    ref_path = find_reference_subtitle(video_path, credentials=("u", "p"))
+
+    assert ref_path is not None
+    assert ref_path.suffix == ".srt"
+    assert ref_path.exists()
+
+
+def test_find_reference_subtitle_returns_none_when_en_not_found(tmp_path, mocker):
+    """find_reference_subtitle retorna None quando EN não disponível."""
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+
+    fake_video = Episode("Filme.S01E01", "Filme", 1, 1)
+    mocker.patch("subs_down_n_sync.core.subliminal.scan_video", return_value=fake_video)
+    mocker.patch(
+        "subs_down_n_sync.core.subliminal.list_subtitles",
+        return_value={fake_video: []},
+    )
+    mocker.patch("subs_down_n_sync.core.subliminal.download_subtitles")
+    mocker.patch("subs_down_n_sync.core.hash_refine")
+
+    ref_path = find_reference_subtitle(video_path, credentials=("u", "p"))
+
+    assert ref_path is None
+
+
+def test_align_cues_by_semantics_simple_1to1(mocker):
+    """Alinhamento 1:1: cues semânticamente equivalentes recebem timestamps da ref."""
+    import numpy as np
+
+    ref_cues = [
+        {"start": 3.0, "end": 5.0, "text": "hello world"},
+        {"start": 11.0, "end": 13.0, "text": "good morning"},
+    ]
+    target_cues = [
+        {"start": 2.0, "end": 4.0, "text": "olá mundo"},
+        {"start": 10.0, "end": 12.0, "text": "bom dia"},
+    ]
+
+    fake_embeddings = {
+        "hello world": np.array([1.0, 0.0]),
+        "good morning": np.array([0.0, 1.0]),
+        "olá mundo": np.array([0.99, 0.01]),
+        "bom dia": np.array([0.01, 0.99]),
+    }
+
+    mock_model = mocker.MagicMock()
+    mock_model.encode.side_effect = lambda texts, **kw: np.array(
+        [fake_embeddings[t] for t in texts]
+    )
+    mocker.patch("subs_down_n_sync.core.SentenceTransformer", return_value=mock_model)
+
+    result = _align_cues_by_semantics(target_cues, ref_cues)
+
+    assert result[0]["start"] == pytest.approx(3.0)
+    assert result[0]["end"] == pytest.approx(5.0)
+    assert result[1]["start"] == pytest.approx(11.0)
+    assert result[1]["end"] == pytest.approx(13.0)
+    assert result[0]["text"] == "olá mundo"
+    assert result[1]["text"] == "bom dia"
+
+
+def test_align_cues_by_semantics_preserves_order(mocker):
+    """Timestamps resultantes devem ser monotonicamente crescentes."""
+    import numpy as np
+
+    ref_cues = [
+        {"start": 1.0, "end": 2.0, "text": "first"},
+        {"start": 3.0, "end": 4.0, "text": "second"},
+        {"start": 5.0, "end": 6.0, "text": "third"},
+    ]
+    target_cues = [
+        {"start": 0.5, "end": 1.5, "text": "primeiro"},
+        {"start": 2.5, "end": 3.5, "text": "segundo"},
+        {"start": 4.5, "end": 5.5, "text": "terceiro"},
+    ]
+
+    def fake_encode(texts, **kw):
+        mapping = {"first": 0, "second": 1, "third": 2, "primeiro": 0, "segundo": 1, "terceiro": 2}
+        return np.array([np.eye(3)[mapping[t]] for t in texts])
+
+    mock_model = mocker.MagicMock()
+    mock_model.encode.side_effect = fake_encode
+    mocker.patch("subs_down_n_sync.core.SentenceTransformer", return_value=mock_model)
+
+    result = _align_cues_by_semantics(target_cues, ref_cues)
+
+    starts = [c["start"] for c in result]
+    assert starts == sorted(starts), "timestamps devem ser monotonicamente crescentes"
+
+
+def test_sync_subtitle_uses_semantic_alignment(tmp_path, mocker):
+    """sync_subtitle chama _align_cues_by_semantics e reescreve srt com novos timestamps."""
+    srt = tmp_path / "Filme.pt-BR.srt"
+    srt.write_text(
+        "1\n00:00:02,000 --> 00:00:04,000\nolá mundo\n\n2\n00:00:10,000 --> 00:00:12,000\nbom dia\n"
+    )
+    ref = tmp_path / "Filme.en.srt"
+    ref.write_text(
+        "1\n00:00:03,000 --> 00:00:05,000\nhello world\n\n"
+        "2\n00:00:11,000 --> 00:00:13,000\ngood morning\n"
+    )
+
+    aligned_cues = [
+        {"start": 3.0, "end": 5.0, "text": "olá mundo"},
+        {"start": 11.0, "end": 13.0, "text": "bom dia"},
+    ]
+    mocker.patch("subs_down_n_sync.core._align_cues_by_semantics", return_value=aligned_cues)
+
+    result = sync_subtitle(srt, ref_path=ref)
+
+    assert result.synced is True
+    assert result.sync_mode == "ref"
+    assert result.offset_seconds == pytest.approx(1.0)
+    synced = srt.read_text()
+    assert "00:00:03,000" in synced
+    assert "00:00:11,000" in synced
+
+
+def test_sync_subtitle_raises_when_alignment_fails(tmp_path, mocker):
+    srt = tmp_path / "Filme.pt-BR.srt"
+    srt.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+    ref = tmp_path / "Filme.en.srt"
+    ref.write_text("1\n00:00:01,000 --> 00:00:02,000\nhi\n")
+    original_text = srt.read_text()
+
+    mocker.patch(
+        "subs_down_n_sync.core._align_cues_by_semantics",
+        side_effect=RuntimeError("modelo falhou"),
+    )
+
+    with pytest.raises(SubtitleSyncError, match="alinhamento semântico falhou"):
+        sync_subtitle(srt, ref_path=ref)
+
+    assert srt.read_text() == original_text
+
+
+def test_sync_subtitle_returns_not_synced_when_offset_below_threshold(tmp_path, mocker):
+    srt = tmp_path / "Filme.pt-BR.srt"
+    original_text = "1\n00:00:01,000 --> 00:00:02,000\nlinha 1\n"
+    srt.write_text(original_text)
+    ref = tmp_path / "Filme.en.srt"
+    ref.write_text("1\n00:00:01,000 --> 00:00:02,000\nline 1\n")
+
+    aligned_cues = [{"start": 1.05, "end": 2.05, "text": "linha 1"}]
+    mocker.patch("subs_down_n_sync.core._align_cues_by_semantics", return_value=aligned_cues)
+
+    result = sync_subtitle(srt, ref_path=ref)
+
+    assert result.synced is False
+    assert srt.read_text() == original_text
