@@ -7,6 +7,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn, TimeElapsedColumn
+from rich.table import Table
 
 from subs_down_n_sync.core import DEFAULT_LANG, VIDEO_EXTENSIONS, RunSummary, run
 from subs_down_n_sync.exceptions import SubsDownError
@@ -90,9 +91,7 @@ def _run_directory(
     lang_tag: str,
     overwrite: bool,
 ) -> tuple[list[RunSummary], list[Path], list[tuple[Path, str]]]:
-    videos = sorted(
-        p for p in dir_path.rglob("*") if p.suffix.lower() in VIDEO_EXTENSIONS
-    )
+    videos = sorted(p for p in dir_path.rglob("*") if p.suffix.lower() in VIDEO_EXTENSIONS)
 
     results: list[RunSummary] = []
     skipped: list[Path] = []
@@ -114,6 +113,57 @@ def _run_directory(
     return results, skipped, errors
 
 
+def _print_batch_summary(
+    results: list[RunSummary],
+    skipped: list[Path],
+    errors: list[tuple[Path, str]],
+) -> None:
+    table = Table(title="subs-down-n-sync — lote", show_lines=False)
+    table.add_column("Arquivo", style="bold")
+    table.add_column("Status")
+    table.add_column("Idioma")
+    table.add_column("Provider")
+    table.add_column("Offset")
+
+    for s in results:
+        if s.sync_error:
+            status = "[yellow]aviso[/yellow]"
+        elif s.synced:
+            status = "[green]sincronizado[/green]"
+        else:
+            status = "[cyan]ok[/cyan]"
+        table.add_row(
+            s.output_path.name,
+            status,
+            s.lang_tag,
+            s.provider,
+            f"{s.offset_seconds:.2f}s",
+        )
+
+    for path in skipped:
+        table.add_row(path.name, "[dim]pulado[/dim]", "-", "-", "-")
+
+    for path, _msg in errors:
+        table.add_row(path.name, "[red]erro[/red]", "-", "-", "-")
+
+    console.print(table)
+
+    parts = []
+    if results:
+        parts.append(f"[green]{len(results)} processado(s)[/green]")
+    if skipped:
+        parts.append(f"[dim]{len(skipped)} pulado(s)[/dim]")
+    if errors:
+        parts.append(f"[red]{len(errors)} erro(s)[/red]")
+
+    console.print("  ".join(parts) if parts else "[dim]Nenhum vídeo encontrado.[/dim]")
+
+    if errors:
+        console.print()
+        for path, msg in errors:
+            err_console.print(f"[bold red]Erro[/bold red] {path.name}: {msg}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="subs-down-n-sync",
@@ -131,7 +181,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--overwrite",
         action="store_true",
         default=False,
-        help="Sobrescrever legendas existentes. Por padrão, vídeos com legenda já existente são pulados.",
+        help=(
+            "Sobrescrever legendas existentes. Por padrão, vídeos com legenda "
+            "já existente são pulados."
+        ),
     )
     return parser
 
@@ -139,6 +192,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    p = Path(args.path).expanduser()
+
+    if p.is_dir():
+        results, skipped, errors = _run_directory(p, lang_tag=args.lang, overwrite=args.overwrite)
+        _print_batch_summary(results, skipped, errors)
+        return 1 if errors else 0
+
+    if not p.exists():
+        err_console.print(f"[bold red]Erro:[/bold red] Caminho não existe: {p}")
+        return 1
 
     progress = _make_progress()
     task_id: TaskID | None = None

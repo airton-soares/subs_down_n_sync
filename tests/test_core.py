@@ -827,6 +827,7 @@ def test_sync_subtitle_returns_not_synced_when_offset_below_threshold(tmp_path, 
 
 def test_build_parser_accepts_directory_path(tmp_path):
     from subs_down_n_sync.cli import build_parser
+
     parser = build_parser()
     args = parser.parse_args([str(tmp_path)])
     assert args.path == str(tmp_path)
@@ -834,6 +835,7 @@ def test_build_parser_accepts_directory_path(tmp_path):
 
 def test_build_parser_overwrite_flag_defaults_to_false():
     from subs_down_n_sync.cli import build_parser
+
     parser = build_parser()
     args = parser.parse_args(["/any/path"])
     assert args.overwrite is False
@@ -841,6 +843,7 @@ def test_build_parser_overwrite_flag_defaults_to_false():
 
 def test_build_parser_overwrite_flag_sets_true():
     from subs_down_n_sync.cli import build_parser
+
     parser = build_parser()
     args = parser.parse_args(["/any/path", "--overwrite"])
     assert args.overwrite is True
@@ -848,6 +851,7 @@ def test_build_parser_overwrite_flag_sets_true():
 
 def test_build_parser_overwrite_short_flag():
     from subs_down_n_sync.cli import build_parser
+
     parser = build_parser()
     args = parser.parse_args(["/any/path", "-o"])
     assert args.overwrite is True
@@ -1006,3 +1010,76 @@ def test_run_directory_empty_dir_returns_empty_lists(tmp_path, mocker):
     assert results == []
     assert skipped == []
     assert errors == []
+
+
+def test_main_dispatches_to_run_directory_when_path_is_dir(tmp_path, mocker):
+    from subs_down_n_sync.cli import main
+
+    v = tmp_path / "filme.mkv"
+    v.write_bytes(b"\x00")
+
+    mock_run_dir = mocker.patch(
+        "subs_down_n_sync.cli._run_directory",
+        return_value=([], [], []),
+    )
+
+    code = main([str(tmp_path)])
+
+    mock_run_dir.assert_called_once_with(tmp_path, lang_tag="pt-BR", overwrite=False)
+    assert code == 0
+
+
+def test_main_returns_1_when_directory_has_errors(tmp_path, mocker):
+    from subs_down_n_sync.cli import main
+
+    v = tmp_path / "filme.mkv"
+    v.write_bytes(b"\x00")
+
+    mocker.patch(
+        "subs_down_n_sync.cli._run_directory",
+        return_value=([], [], [(v, "sem legenda")]),
+    )
+
+    code = main([str(tmp_path)])
+
+    assert code == 1
+
+
+def test_main_returns_0_when_directory_all_skipped(tmp_path, mocker):
+    from subs_down_n_sync.cli import main
+
+    v = tmp_path / "filme.mkv"
+    v.write_bytes(b"\x00")
+
+    mocker.patch(
+        "subs_down_n_sync.cli._run_directory",
+        return_value=([], [v], []),
+    )
+
+    code = main([str(tmp_path)])
+
+    assert code == 0
+
+
+def test_main_returns_1_when_path_does_not_exist(tmp_path):
+    from subs_down_n_sync.cli import main
+
+    code = main([str(tmp_path / "naoexiste")])
+
+    assert code == 1
+
+
+def test_main_passes_overwrite_flag_to_run_directory(tmp_path, mocker):
+    from subs_down_n_sync.cli import main
+
+    v = tmp_path / "filme.mkv"
+    v.write_bytes(b"\x00")
+
+    mock_run_dir = mocker.patch(
+        "subs_down_n_sync.cli._run_directory",
+        return_value=([], [], []),
+    )
+
+    main([str(tmp_path), "--overwrite"])
+
+    mock_run_dir.assert_called_once_with(tmp_path, lang_tag="pt-BR", overwrite=True)
