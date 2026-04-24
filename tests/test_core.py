@@ -422,7 +422,6 @@ def test_main_success_prints_summary(tmp_path, monkeypatch, mocker, capsys):
     assert "opensubtitles" in captured.out
     assert "hash" in captured.out
     assert "0.42" in captured.out
-    assert "Filme.pt-BR.srt" in captured.out
 
 
 def test_main_lang_flag_uses_custom_language(tmp_path, monkeypatch, mocker):

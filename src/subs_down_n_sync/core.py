@@ -7,6 +7,7 @@ import re
 import shutil
 import tempfile
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -453,35 +454,59 @@ def finalize_output_path(video_path: Path, srt_path: Path, lang_tag: str) -> Pat
     return target
 
 
-def run(video_arg: str, lang_tag: str = DEFAULT_LANG) -> RunSummary:
+ProgressCallback = Callable[[str, str], None]
+
+
+def run(
+    video_arg: str,
+    lang_tag: str = DEFAULT_LANG,
+    on_progress: ProgressCallback | None = None,
+) -> RunSummary:
+    def _notify(step: str, detail: str = "") -> None:
+        if on_progress:
+            on_progress(step, detail)
+
     start = time.monotonic()
+
+    _notify("validando", video_arg)
     video_path = validate_video_path(video_arg)
     check_ffmpeg()
     language = parse_language(lang_tag)
     credentials = load_credentials()
 
+    _notify("buscando", f"idioma={lang_tag}")
     srt_path, info = find_and_download_subtitle(
         video_path, language=language, credentials=credentials
     )
+    _notify("baixado", f"provider={info.provider} match={info.match_type}")
 
     sync_error: str | None = None
 
     if info.needs_sync:
+        _notify("referencia", "buscando EN")
         ref_path = find_reference_subtitle(video_path, credentials=credentials)
+
         if ref_path is None:
             sync_error = "legenda EN de referência não encontrada — sincronização ignorada"
             sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
+            _notify("sem_referencia", "")
         else:
+            _notify("sincronizando", "embeddings semânticos")
             try:
                 sync_result = sync_subtitle(srt_path, ref_path=ref_path)
+                _notify("sincronizado", f"offset={sync_result.offset_seconds:.2f}s")
             except SubtitleSyncError as e:
                 sync_error = str(e)
                 sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
+                _notify("erro_sync", str(e))
     else:
         sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
+        _notify("sem_sync", f"offset={sync_result.offset_seconds:.2f}s")
 
     final_path = finalize_output_path(video_path, srt_path, lang_tag=lang_tag)
     elapsed = time.monotonic() - start
+
+    _notify("concluido", str(final_path))
 
     return RunSummary(
         output_path=final_path,
