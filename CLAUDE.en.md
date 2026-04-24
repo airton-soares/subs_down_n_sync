@@ -22,9 +22,6 @@ subs_down_n_sync/
 ├── scripts/
 │   └── smoke_test.py            # manual test against real API
 ├── docs/
-│   └── superpowers/
-│       ├── specs/               # design docs (pt-BR + .en.md English)
-│       └── plans/               # implementation plans (pt-BR + .en.md English)
 ├── .github/workflows/ci.yml
 ├── .gitignore
 ├── CLAUDE.md                    # Portuguese version
@@ -48,11 +45,6 @@ Install system dependencies:
 # ffmpeg
 sudo apt install ffmpeg    # Debian/Ubuntu
 brew install ffmpeg        # macOS
-
-# alass (Rust binary — download release from https://github.com/kaegi/alass/releases)
-# Linux x86_64 example:
-curl -L https://github.com/kaegi/alass/releases/latest/download/alass-linux-amd64 -o ~/.local/bin/alass
-chmod +x ~/.local/bin/alass
 ```
 
 Configure OpenSubtitles credentials:
@@ -78,7 +70,7 @@ python -m subs_down_n_sync /path/to/movie.mkv
 ```bash
 pytest                    # unit tests (default, with 90% coverage gate)
 pytest --no-cov           # no gate (useful with -k or --collect-only)
-pytest -m integration     # integration tests (requires ffmpeg, alass and network)
+pytest -m integration     # integration tests (requires ffmpeg, stable-ts and network)
 pytest -m ""              # everything (unit + integration)
 ```
 
@@ -97,11 +89,4 @@ ruff check --fix .      # apply automatic fixes
 - **Commits:** Conventional Commits in Portuguese (e.g. `feat: adicionar suporte a ...`)
 - **Exceptions:** all in `src/subs_down_n_sync/exceptions.py`, imported explicitly
 - **Blank lines:** separate logical blocks inside functions with one blank line
-- **Bilingual docs:** every `.md` file has a `.en.md` English counterpart (README, CLAUDE, specs, plans)
-
-## Specs and plans
-
-- Original spec: `docs/superpowers/specs/2026-04-19-subs_down_n_sync-design.md`
-- Restructure spec: `docs/superpowers/specs/2026-04-22-project-restructure-design.md`
-- Original plan: `docs/superpowers/plans/2026-04-19-subs_down_n_sync.md`
-- Restructure plan: `docs/superpowers/plans/2026-04-22-project-restructure.md`
+- **Bilingual docs:** every `.md` file has a `.en.md` English counterpart (README, CLAUDE)

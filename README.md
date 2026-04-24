@@ -4,6 +4,8 @@
 
 CLI Python para baixar e sincronizar legendas para arquivos de vídeo. Idioma padrão: **pt-BR**, configurável via flag `--lang` (qualquer tag BCP 47).
 
+A sincronização usa o modelo Whisper tiny via [stable-ts](https://github.com/jianfch/stable-ts): alinha os timestamps da legenda baixada ao áudio do vídeo. Legendas com match exato (hash ou release group) são usadas sem sincronização.
+
 ## Setup
 
 ```bash
@@ -12,7 +14,7 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Instale também o `ffmpeg` no sistema (usado pelo `ffsubsync`):
+Instale também o `ffmpeg` no sistema:
 
 ```bash
 sudo apt install ffmpeg    # Debian/Ubuntu
@@ -74,14 +76,14 @@ O CI falha se `ruff format --check` ou `ruff check` encontrarem problemas.
 
 O projeto tem duas camadas de testes:
 
-- **Testes unitários** (padrão, `pytest`) — rápidos, mockam `subliminal` e `ffsubsync`. Não precisam de rede nem de binários externos além do Python.
-- **Testes de integração** (`pytest -m integration`) — exercitam o `ffsubsync` real com o trailer do Sintel (Blender Foundation, Creative Commons). O vídeo é baixado automaticamente na primeira execução e cacheado em `tests/fixtures/.cache/`. Requer `ffmpeg` e `ffsubsync` no PATH e acesso à internet no primeiro run.
+- **Testes unitários** (padrão, `pytest`) — rápidos, mockam `subliminal` e `stable_whisper`. Não precisam de rede nem de binários externos além do Python.
+- **Testes de integração** (`pytest -m integration`) — exercitam o `stable-ts` real com o trailer do Sintel (Blender Foundation, Creative Commons). O vídeo é baixado automaticamente na primeira execução e cacheado em `tests/fixtures/.cache/`. Requer `ffmpeg` no PATH e acesso à internet no primeiro run.
 
 Como rodar cada camada:
 
 ```bash
 pytest                    # só unit (rápido)
-pytest -m integration     # só integração (baixa vídeo ~4 MB, roda ffsubsync real)
+pytest -m integration     # só integração (baixa vídeo ~4 MB, roda stable-ts real)
 pytest -m ""              # tudo (unit + integração)
 ```
 

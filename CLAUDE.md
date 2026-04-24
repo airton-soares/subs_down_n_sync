@@ -22,9 +22,6 @@ subs_down_n_sync/
 ├── scripts/
 │   └── smoke_test.py            # teste manual contra API real
 ├── docs/
-│   └── superpowers/
-│       ├── specs/               # design docs (pt-BR + .en.md inglês)
-│       └── plans/               # planos de implementação (pt-BR + .en.md inglês)
 ├── .github/workflows/ci.yml
 ├── .gitignore
 ├── CLAUDE.md                    # este arquivo (pt-BR)
@@ -48,11 +45,6 @@ Instale as dependências do sistema:
 # ffmpeg
 sudo apt install ffmpeg    # Debian/Ubuntu
 brew install ffmpeg        # macOS
-
-# alass (binário Rust — baixar release em https://github.com/kaegi/alass/releases)
-# Exemplo Linux x86_64:
-curl -L https://github.com/kaegi/alass/releases/latest/download/alass-linux-amd64 -o ~/.local/bin/alass
-chmod +x ~/.local/bin/alass
 ```
 
 Configure as credenciais do OpenSubtitles:
@@ -78,7 +70,7 @@ python -m subs_down_n_sync /caminho/para/filme.mkv
 ```bash
 pytest                    # testes unitários (padrão, com gate de cobertura 90%)
 pytest --no-cov           # sem gate (útil com -k ou --collect-only)
-pytest -m integration     # testes de integração (requer ffmpeg, alass e rede)
+pytest -m integration     # testes de integração (requer ffmpeg, stable-ts e rede)
 pytest -m ""              # tudo (unit + integração)
 ```
 
@@ -97,11 +89,4 @@ ruff check --fix .      # aplica fixes automáticos
 - **Commits:** Conventional Commits em português (ex.: `feat: adicionar suporte a ...`)
 - **Exceções:** todas em `src/subs_down_n_sync/exceptions.py`, importadas explicitamente
 - **Linhas em branco:** separar blocos lógicos dentro de funções por uma linha em branco
-- **Docs bilíngues:** todo arquivo `.md` tem par `.en.md` em inglês (README, CLAUDE, specs, plans)
-
-## Specs e planos
-
-- Spec original: `docs/superpowers/specs/2026-04-19-subs_down_n_sync-design.md`
-- Spec de reestruturação: `docs/superpowers/specs/2026-04-22-project-restructure-design.md`
-- Plano original: `docs/superpowers/plans/2026-04-19-subs_down_n_sync.md`
-- Plano de reestruturação: `docs/superpowers/plans/2026-04-22-project-restructure.md`
+- **Docs bilíngues:** todo arquivo `.md` tem par `.en.md` em inglês (README, CLAUDE)

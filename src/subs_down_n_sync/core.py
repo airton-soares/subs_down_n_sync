@@ -5,15 +5,18 @@ from __future__ import annotations
 import os
 import re
 import shutil
-import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import subliminal
 from babelfish import Language
+from scipy.spatial.distance import cdist
+from sentence_transformers import SentenceTransformer
 from subliminal.refiners.hash import refine as hash_refine
-from subliminal.score import compute_score, get_scores
+from subliminal.score import compute_score
 
 from subs_down_n_sync.exceptions import (
     InvalidLanguageError,
@@ -28,8 +31,21 @@ VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".we
 
 DEFAULT_LANG = "pt-BR"
 
-
 SCORE_THRESHOLD = 0.9  # score/max_score >= 90% → sem sync
+
+SYNC_THRESHOLD_SECONDS = 0.1
+
+_TS_RE = re.compile(
+    r"^(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}",
+    re.MULTILINE,
+)
+
+_SRT_BLOCK_RE = re.compile(
+    r"(\d+)\n"
+    r"(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})\n"
+    r"((?:.+\n?)+)",
+    re.MULTILINE,
+)
 
 
 @dataclass(frozen=True)
@@ -39,27 +55,11 @@ class SubtitleInfo:
     needs_sync: bool
 
 
-SYNC_THRESHOLD_SECONDS = 0.1
-
-_TS_RE = re.compile(
-    r"^(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}",
-    re.MULTILINE,
-)
-
-# Captura linha completa de timestamps: start --> end
-_TS_LINE_RE = re.compile(
-    r"(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})",
-)
-
-# FPS padrões conhecidos usados em legendas
-_COMMON_FPS = [23.976, 24.0, 25.0, 29.97, 30.0]
-
-
 @dataclass(frozen=True)
 class SyncResult:
     synced: bool
     offset_seconds: float
-    sync_mode: str = "none"  # "ref" | "video" | "none"
+    sync_mode: str = "none"  # "video" | "none"
 
 
 @dataclass(frozen=True)
@@ -80,14 +80,6 @@ def check_ffmpeg() -> None:
         raise MissingDependencyError(
             "ffmpeg não encontrado no PATH. Instale via gerenciador de pacotes "
             "(ex.: sudo apt install ffmpeg, brew install ffmpeg)."
-        )
-
-
-def check_alass() -> None:
-    if shutil.which("alass") is None:
-        raise MissingDependencyError(
-            "alass não encontrado no PATH. Baixe o binário em "
-            "https://github.com/kaegi/alass/releases e coloque no PATH."
         )
 
 
@@ -146,6 +138,17 @@ def _classify_match(matches: set[str]) -> str:
     return "fallback"
 
 
+def _filename_similarity(sub_filename: str, video_name: str) -> float:
+    """Fração de tokens do stem do vídeo presentes no nome da legenda."""
+    norm = re.compile(r"[\W_]+")
+    video_stem = Path(video_name).stem
+    sub_tokens = set(norm.sub(" ", sub_filename.lower()).split())
+    video_tokens = set(norm.sub(" ", video_stem.lower()).split())
+    if not video_tokens:
+        return 0.0
+    return len(sub_tokens & video_tokens) / len(video_tokens)
+
+
 def _pick_subtitle(
     candidates: list,
     video: object,
@@ -154,53 +157,80 @@ def _pick_subtitle(
 
     Retorna (subtitle, match_type, needs_sync).
     Ordem de preferência:
-      1. score >= 90% do máximo → sem sync
-      2. release_group match → sem sync
-      3. melhor score disponível → com sync
+      1. hash match → sem sync
+      2. release_group match → melhor filename similarity → com sync
+      3. fallback → melhor filename similarity → com sync
     """
-    max_score = get_scores(video)["hash"]
-    threshold = int(max_score * SCORE_THRESHOLD)
+    video_name = getattr(video, "name", "") or ""
 
     scored = [(sub, compute_score(sub, video)) for sub in candidates]
     scored.sort(key=lambda x: x[1], reverse=True)
 
-    for sub, score in scored:
-        matches = set(sub.get_matches(video))
-        if score >= threshold:
-            return sub, _classify_match(matches), False
-        if "release_group" in matches:
-            return sub, "release", False
+    # 1. hash match
+    for sub, _ in scored:
+        if "hash" in set(sub.get_matches(video)):
+            return sub, "hash", False
 
-    best_sub, _ = scored[0]
-    match_type = _classify_match(set(best_sub.get_matches(video)))
+    # 2. release_group match
+    release_candidates = [
+        (sub, score) for sub, score in scored if "release_group" in set(sub.get_matches(video))
+    ]
+    pool = release_candidates if release_candidates else scored
+    match_type = "release" if release_candidates else "fallback"
+
+    best_sub = max(
+        pool,
+        key=lambda x: _filename_similarity(getattr(x[0], "filename", "") or "", video_name),
+    )[0]
     return best_sub, match_type, True
+
+
+def _download_sub(
+    video: object,
+    language: Language,
+    provider_configs: dict,
+) -> object | None:
+    """Busca e baixa melhor legenda disponível para o idioma. Retorna subtitle ou None."""
+    results = subliminal.list_subtitles(
+        {video},
+        {language},
+        providers=["opensubtitles"],
+        provider_configs=provider_configs,
+    )
+    candidates = results.get(video, [])
+    candidates = [s for s in candidates if getattr(s, "language", None) == language]
+
+    if not candidates:
+        return None
+
+    scored = [(sub, compute_score(sub, video)) for sub in candidates]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    best = scored[0][0]
+
+    subliminal.download_subtitles([best], provider_configs=provider_configs)
+    return best if best.text else None
 
 
 def find_and_download_subtitle(
     video_path: Path,
     language: Language,
     credentials: tuple[str, str],
-) -> tuple[Path, SubtitleInfo, Path | None]:
+) -> tuple[Path, SubtitleInfo]:
     user, pwd = credentials
     video = subliminal.scan_video(str(video_path))
     hash_refine(video)
 
     provider_configs = {"opensubtitles": {"username": user, "password": pwd}}
 
-    en_lang = Language("eng")
-    needs_ref = language != en_lang
-
-    languages_to_fetch = {language, en_lang} if needs_ref else {language}
-
     results = subliminal.list_subtitles(
         {video},
-        languages_to_fetch,
+        {language},
         providers=["opensubtitles"],
         provider_configs=provider_configs,
     )
     candidates = results.get(video, [])
-
     target_candidates = [s for s in candidates if getattr(s, "language", None) == language]
+
     if not target_candidates:
         raise SubtitleNotFoundError(
             f"Nenhuma legenda em {language.alpha3} encontrada para: {video_path.name}"
@@ -208,22 +238,7 @@ def find_and_download_subtitle(
 
     subtitle, match_type, needs_sync = _pick_subtitle(target_candidates, video)
 
-    ref_candidates = (
-        [s for s in candidates if getattr(s, "language", None) == en_lang] if needs_ref else []
-    )
-    # Usar en como referência só se ela própria não precisar de sync — legenda
-    # dessincronizada como referência piora o resultado do alass.
-    ref_subtitle = None
-    if ref_candidates:
-        best_ref, _, ref_needs_sync = _pick_subtitle(ref_candidates, video)
-        if not ref_needs_sync:
-            ref_subtitle = best_ref
-
-    to_download = [subtitle]
-    if ref_subtitle is not None:
-        to_download.append(ref_subtitle)
-
-    subliminal.download_subtitles(to_download, provider_configs=provider_configs)
+    subliminal.download_subtitles([subtitle], provider_configs=provider_configs)
 
     # Não usamos subliminal.save_subtitles porque ele grava os bytes crus no
     # encoding detectado (ex.: cp1252), produzindo mojibake. Pegamos o texto
@@ -234,18 +249,65 @@ def find_and_download_subtitle(
     srt_path = video_path.parent / Path(subtitle.get_path(video)).name
     srt_path.write_text(subtitle.text, encoding="utf-8")
 
-    ref_path: Path | None = None
-    if ref_subtitle is not None and ref_subtitle.text:
-        ref_path = video_path.parent / Path(ref_subtitle.get_path(video)).name
-        ref_path.write_text(ref_subtitle.text, encoding="utf-8")
-
     info = SubtitleInfo(
         provider=subtitle.provider_name,
         match_type=match_type,
         needs_sync=needs_sync,
     )
 
-    return srt_path, info, ref_path
+    return srt_path, info
+
+
+def find_reference_subtitle(
+    video_path: Path,
+    credentials: tuple[str, str],
+) -> Path | None:
+    """Baixa legenda EN como referência de alinhamento. Retorna path ou None."""
+    user, pwd = credentials
+    video = subliminal.scan_video(str(video_path))
+    hash_refine(video)
+
+    en = Language("eng")
+    provider_configs = {"opensubtitles": {"username": user, "password": pwd}}
+
+    subtitle = _download_sub(video, en, provider_configs)
+    if subtitle is None:
+        return None
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="subs_ref_"))
+    ref_path = tmp_dir / Path(subtitle.get_path(video)).name
+    ref_path.write_text(subtitle.text, encoding="utf-8")
+
+    return ref_path
+
+
+def _ts(h: str, m: str, s: str, ms: str) -> float:
+    return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
+
+
+def _seconds_to_ts(total: float) -> str:
+    total = max(0.0, total)
+    h = int(total // 3600)
+    m = int((total % 3600) // 60)
+    s = int(total % 60)
+    ms = round((total - int(total)) * 1000)
+    if ms == 1000:
+        ms = 0
+        s += 1
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def _srt_to_segments(srt_text: str) -> list[dict]:
+    segments = []
+    for m in _SRT_BLOCK_RE.finditer(srt_text):
+        segments.append(
+            {
+                "start": _ts(m.group(2), m.group(3), m.group(4), m.group(5)),
+                "end": _ts(m.group(6), m.group(7), m.group(8), m.group(9)),
+                "text": m.group(10).strip(),
+            }
+        )
+    return segments
 
 
 def _parse_srt_timestamps(srt_text: str) -> list[float]:
@@ -268,159 +330,116 @@ def _mean_offset_seconds(orig: list[float], synced: list[float]) -> float:
     return total / n
 
 
-def _ts_to_seconds(h: str, m: str, s: str, ms: str) -> float:
-    return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
+_SEMANTIC_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 
 
-def _seconds_to_ts(t: float) -> str:
-    t = max(0.0, t)
-    h = int(t // 3600)
-    m = int((t % 3600) // 60)
-    s = int(t % 60)
-    ms = round((t - int(t)) * 1000)
-    if ms == 1000:
-        s += 1
-        ms = 0
-    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+def _align_cues_by_semantics(
+    target_cues: list[dict],
+    ref_cues: list[dict],
+) -> list[dict]:
+    """Alinha cues de legenda alvo aos timestamps da referência via embeddings semânticos + DTW.
 
-
-def _detect_fps_ratio(srt_text: str, ref_text: str) -> float:
-    """Estima ratio FPS comparando duração total dos cues."""
-
-    def total_duration(text: str) -> float:
-        matches = _TS_LINE_RE.findall(text)
-        if not matches:
-            return 0.0
-        last = matches[-1]
-        return _ts_to_seconds(*last[4:8])
-
-    dur_target = total_duration(srt_text)
-    dur_ref = total_duration(ref_text)
-
-    if dur_target < 1.0 or dur_ref < 1.0:
-        return 1.0
-
-    raw_ratio = dur_ref / dur_target
-
-    # Snap para ratio de FPS conhecido mais próximo
-    best = 1.0
-    best_dist = float("inf")
-    for fps_ref in _COMMON_FPS:
-        for fps_target in _COMMON_FPS:
-            r = fps_ref / fps_target
-            dist = abs(r - raw_ratio)
-            if dist < best_dist:
-                best_dist = dist
-                best = r
-
-    # Só aplica se o ratio for significativamente diferente de 1.0
-    if abs(best - 1.0) < 0.001:
-        return 1.0
-
-    return best
-
-
-def _best_shift_by_correlation(
-    target_ts: list[float],
-    ref_ts: list[float],
-    fps_ratio: float,
-    search_range: float = 180.0,
-    step: float = 0.5,
-    tolerance: float = 1.0,
-) -> float:
-    """Encontra o shift que maximiza o número de timestamps alinhados.
-
-    Para cada offset candidato, conta quantos timestamps da legenda alvo
-    (após aplicar fps_ratio e offset) ficam a ≤ tolerance de algum timestamp
-    da referência. Retorna o offset com maior contagem.
+    Para cada cue alvo, encontra o(s) cue(s) ref mais similar(es) semanticamente
+    e copia os timestamps. Garante ordem monotônica crescente no resultado.
     """
-    best_shift = 0.0
-    best_count = -1
-    best_abs = float("inf")
+    model = SentenceTransformer(_SEMANTIC_MODEL)
 
-    offset = -search_range
-    while offset <= search_range:
-        count = sum(
-            1
-            for t in target_ts
-            if any(abs(t * fps_ratio + offset - r) <= tolerance for r in ref_ts)
+    target_texts = [c["text"] for c in target_cues]
+    ref_texts = [c["text"] for c in ref_cues]
+
+    target_emb = model.encode(target_texts, convert_to_numpy=True)
+    ref_emb = model.encode(ref_texts, convert_to_numpy=True)
+
+    # matriz de distância coseno: shape (len_target, len_ref)
+    dist_matrix = cdist(target_emb, ref_emb, metric="cosine")
+
+    # DTW simples: encontra caminho de alinhamento ótimo
+    n, m = dist_matrix.shape
+    cost = np.full((n + 1, m + 1), np.inf)
+    cost[0, 0] = 0.0
+
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            cost[i, j] = dist_matrix[i - 1, j - 1] + min(
+                cost[i - 1, j],  # inserção
+                cost[i, j - 1],  # deleção
+                cost[i - 1, j - 1],  # match
+            )
+
+    # traceback
+    path: list[tuple[int, int]] = []
+    i, j = n, m
+    while i > 0 and j > 0:
+        path.append((i - 1, j - 1))
+        options = [
+            (cost[i - 1, j - 1], i - 1, j - 1),
+            (cost[i - 1, j], i - 1, j),
+            (cost[i, j - 1], i, j - 1),
+        ]
+        _, i, j = min(options, key=lambda x: x[0])
+    path.reverse()
+
+    # para cada cue alvo, coleta os ref_cues mapeados e usa média dos timestamps
+    from collections import defaultdict
+
+    target_to_refs: dict[int, list[int]] = defaultdict(list)
+    for ti, ri in path:
+        target_to_refs[ti].append(ri)
+
+    result = []
+    for ti, cue in enumerate(target_cues):
+        mapped = target_to_refs.get(ti, [])
+        if mapped:
+            start = float(np.mean([ref_cues[ri]["start"] for ri in mapped]))
+            end = float(np.mean([ref_cues[ri]["end"] for ri in mapped]))
+        else:
+            start, end = cue["start"], cue["end"]
+        result.append({"start": start, "end": end, "text": cue["text"]})
+
+    # garante ordem monotônica
+    for i in range(1, len(result)):
+        if result[i]["start"] <= result[i - 1]["start"]:
+            gap = result[i - 1]["end"] - result[i - 1]["start"]
+            result[i]["start"] = result[i - 1]["start"] + gap
+            result[i]["end"] = result[i]["start"] + (result[i]["end"] - result[i]["start"])
+
+    return result
+
+
+def _cues_to_srt(cues: list[dict]) -> str:
+    lines = []
+    for i, cue in enumerate(cues, start=1):
+        lines.append(
+            f"{i}\n{_seconds_to_ts(cue['start'])} --> {_seconds_to_ts(cue['end'])}\n{cue['text']}\n"
         )
-        if count > best_count or (count == best_count and abs(offset) < best_abs):
-            best_count = count
-            best_shift = offset
-            best_abs = abs(offset)
-        offset += step
-
-    return best_shift
-
-
-def align_subtitle_to_reference(srt_text: str, ref_text: str) -> str:
-    """Alinha legenda à referência via correlação de timestamps + correção de FPS.
-
-    Testa shifts de -180s a +180s e escolhe o que maximiza o overlap com a
-    referência, evitando ancoragem no primeiro cue (que pode ser abertura).
-    """
-    ref_starts = _parse_srt_timestamps(ref_text)
-    target_starts = _parse_srt_timestamps(srt_text)
-
-    if not ref_starts or not target_starts:
-        return srt_text
-
-    fps_ratio = _detect_fps_ratio(srt_text, ref_text)
-    shift = _best_shift_by_correlation(target_starts, ref_starts, fps_ratio)
-
-    def replace_ts(m: re.Match) -> str:
-        t_start = _ts_to_seconds(m.group(1), m.group(2), m.group(3), m.group(4))
-        t_end = _ts_to_seconds(m.group(5), m.group(6), m.group(7), m.group(8))
-        new_start = t_start * fps_ratio + shift
-        new_end = t_end * fps_ratio + shift
-        return f"{_seconds_to_ts(new_start)} --> {_seconds_to_ts(new_end)}"
-
-    return _TS_LINE_RE.sub(replace_ts, srt_text)
+    return "\n".join(lines)
 
 
 def sync_subtitle(
-    video_path: Path,
     srt_path: Path,
-    ref_path: Path | None,
+    ref_path: Path,
 ) -> SyncResult:
-    orig_text = srt_path.read_text(encoding="utf-8", errors="replace")
-    orig_ts = _parse_srt_timestamps(orig_text)
+    """Alinha legenda alvo usando legenda EN de referência via embeddings semânticos."""
+    target_text = srt_path.read_text(encoding="utf-8", errors="replace")
+    target_cues = _srt_to_segments(target_text)
+    target_ts_orig = [c["start"] for c in target_cues]
 
-    if ref_path is not None:
-        ref_text = ref_path.read_text(encoding="utf-8", errors="replace")
-        synced_text = align_subtitle_to_reference(orig_text, ref_text)
-        sync_mode = "ref"
-    else:
-        synced_path = srt_path.with_suffix(".synced.srt")
-        cmd = ["alass", str(video_path), str(srt_path), str(synced_path)]
+    ref_text = ref_path.read_text(encoding="utf-8", errors="replace")
+    ref_cues = _srt_to_segments(ref_text)
 
-        try:
-            subprocess.run(cmd, capture_output=True, text=True, check=True)
-        except subprocess.CalledProcessError as e:
-            raise SubtitleSyncError(
-                f"alass falhou (exit {e.returncode}): {e.stderr or e.stdout or '<sem saída>'}"
-            ) from e
-        except FileNotFoundError as e:
-            raise SubtitleSyncError(
-                "alass não encontrado no PATH. Baixe em https://github.com/kaegi/alass/releases"
-            ) from e
+    try:
+        aligned_cues = _align_cues_by_semantics(target_cues, ref_cues)
+    except Exception as e:
+        raise SubtitleSyncError(f"alinhamento semântico falhou: {e}") from e
 
-        if not synced_path.exists():
-            raise SubtitleSyncError("alass terminou sem criar o arquivo de saída.")
-
-        synced_text = synced_path.read_text(encoding="utf-8", errors="replace")
-        synced_path.unlink(missing_ok=True)
-        sync_mode = "video"
-
-    sync_ts = _parse_srt_timestamps(synced_text)
-    offset = _mean_offset_seconds(orig_ts, sync_ts)
+    aligned_ts = [c["start"] for c in aligned_cues]
+    offset = _mean_offset_seconds(target_ts_orig, aligned_ts)
 
     if offset < SYNC_THRESHOLD_SECONDS:
         return SyncResult(synced=False, offset_seconds=offset, sync_mode="none")
 
-    srt_path.write_text(synced_text, encoding="utf-8")
-    return SyncResult(synced=True, offset_seconds=offset, sync_mode=sync_mode)
+    srt_path.write_text(_cues_to_srt(aligned_cues), encoding="utf-8")
+    return SyncResult(synced=True, offset_seconds=offset, sync_mode="ref")
 
 
 def finalize_output_path(video_path: Path, srt_path: Path, lang_tag: str) -> Path:
@@ -438,24 +457,26 @@ def run(video_arg: str, lang_tag: str = DEFAULT_LANG) -> RunSummary:
     start = time.monotonic()
     video_path = validate_video_path(video_arg)
     check_ffmpeg()
-    check_alass()
     language = parse_language(lang_tag)
     credentials = load_credentials()
 
-    srt_path, info, ref_path = find_and_download_subtitle(
+    srt_path, info = find_and_download_subtitle(
         video_path, language=language, credentials=credentials
     )
 
     sync_error: str | None = None
+
     if info.needs_sync:
-        try:
-            sync_result = sync_subtitle(video_path, srt_path, ref_path)
-        except SubtitleSyncError as e:
-            sync_error = str(e)
+        ref_path = find_reference_subtitle(video_path, credentials=credentials)
+        if ref_path is None:
+            sync_error = "legenda EN de referência não encontrada — sincronização ignorada"
             sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
-        finally:
-            if ref_path is not None:
-                ref_path.unlink(missing_ok=True)
+        else:
+            try:
+                sync_result = sync_subtitle(srt_path, ref_path=ref_path)
+            except SubtitleSyncError as e:
+                sync_error = str(e)
+                sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
     else:
         sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
 

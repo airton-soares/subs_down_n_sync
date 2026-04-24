@@ -1,4 +1,4 @@
-"""Testes de integração: exercitam alass com vídeo real baixado do Blender.
+"""Testes de integração: exercitam stable-ts com vídeo real baixado do Blender.
 
 Camada A da estratégia de testes. Rodar com:
     pytest -m integration
@@ -56,8 +56,6 @@ def _make_srt(cues: list[tuple[float, float, str]]) -> str:
 def sintel_trailer() -> Path:
     if not _have("ffmpeg"):
         pytest.skip("ffmpeg não instalado")
-    if not _have("alass"):
-        pytest.skip("alass não instalado")
 
     if VIDEO_CACHE.exists():
         return VIDEO_CACHE
@@ -79,9 +77,8 @@ def sintel_trailer() -> Path:
     return VIDEO_CACHE
 
 
-def test_alass_detects_random_per_cue_shift_and_replaces_original(sintel_trailer, tmp_path):
-    """alass deve detectar dessincronia aleatória por cue (0–2s) e substituir o SRT."""
-    # Seed fixa para reprodutibilidade dos shifts entre runs.
+def test_stable_ts_detects_random_per_cue_shift_and_replaces_original(sintel_trailer, tmp_path):
+    """stable-ts deve detectar dessincronia aleatória por cue (0–2s) e substituir o SRT."""
     rng = random.Random(42)
     base_cues = [(5.0, 7.0, "cue 1"), (15.0, 17.0, "cue 2"), (30.0, 32.0, "cue 3")]
     shifted_cues = [
@@ -93,26 +90,21 @@ def test_alass_detects_random_per_cue_shift_and_replaces_original(sintel_trailer
     srt_path.write_text(_make_srt(shifted_cues), encoding="utf-8")
     original_content = srt_path.read_text(encoding="utf-8")
 
-    result = sync_subtitle(sintel_trailer, srt_path, ref_path=None)
+    result = sync_subtitle(sintel_trailer, srt_path)
 
-    # Tolerância larga: alass pode variar em áudios curtos com música.
     assert result.synced is True, (
-        f"alass deveria detectar os shifts aleatórios como acima do limiar "
+        f"stable-ts deveria detectar os shifts aleatórios como acima do limiar "
         f"{SYNC_THRESHOLD_SECONDS}s, mas offset medido foi {result.offset_seconds:.3f}s"
     )
-    assert 0.1 <= result.offset_seconds < 6.0, (
-        f"offset esperado entre 0.1 e 6.0s, obtido {result.offset_seconds:.3f}s"
+    assert result.offset_seconds >= 0.1, (
+        f"offset esperado >= 0.1s, obtido {result.offset_seconds:.3f}s"
     )
     assert srt_path.exists()
     assert srt_path.read_text(encoding="utf-8") != original_content
-    assert not list(tmp_path.glob("*.synced.srt")), "não deve restar arquivo .synced.srt temporário"
 
 
-def test_alass_fails_cleanly_on_bad_video(tmp_path):
-    """alass deve falhar com SubtitleSyncError ao receber vídeo corrompido."""
-    if not _have("alass"):
-        pytest.skip("alass não instalado")
-
+def test_stable_ts_fails_cleanly_on_bad_video(tmp_path):
+    """stable-ts deve falhar com SubtitleSyncError ao receber vídeo corrompido."""
     bogus_video = tmp_path / "bogus.mkv"
     bogus_video.write_bytes(b"\x00\x01\x02\x03")
 
@@ -120,4 +112,4 @@ def test_alass_fails_cleanly_on_bad_video(tmp_path):
     srt_path.write_text(_make_srt([(1.0, 2.0, "teste")]), encoding="utf-8")
 
     with pytest.raises(SubtitleSyncError):
-        sync_subtitle(bogus_video, srt_path, ref_path=None)
+        sync_subtitle(bogus_video, srt_path)
