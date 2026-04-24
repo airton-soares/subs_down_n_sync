@@ -61,6 +61,11 @@ export OPENSUBTITLES_PASSWORD="sua_senha"
 subs-down-n-sync /caminho/para/filme.mkv
 subs-down-n-sync /caminho/para/filme.mkv --lang en
 
+# Processar diretório inteiro (recursivo)
+subs-down-n-sync /caminho/para/pasta/
+subs-down-n-sync /caminho/para/pasta/ --lang en
+subs-down-n-sync /caminho/para/pasta/ --overwrite   # sobrescreve legendas existentes
+
 # Via módulo Python
 python -m subs_down_n_sync /caminho/para/filme.mkv
 ```

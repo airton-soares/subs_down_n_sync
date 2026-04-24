@@ -38,9 +38,16 @@ subs-down-n-sync /caminho/para/filme.mkv
 subs-down-n-sync /caminho/para/filme.mkv --lang en
 subs-down-n-sync /caminho/para/filme.mkv -l es
 
+# Processar diretório inteiro (busca vídeos recursivamente)
+subs-down-n-sync /caminho/para/pasta/
+subs-down-n-sync /caminho/para/pasta/ --lang en
+subs-down-n-sync /caminho/para/pasta/ --overwrite   # sobrescreve legendas existentes
+
 # Ou via módulo Python
 python -m subs_down_n_sync /caminho/para/filme.mkv
 ```
+
+Ao passar um diretório, vídeos que já têm legenda (`<video>.<lang>.srt`) são pulados por padrão. Use `--overwrite` / `-o` para reprocessar.
 
 Saída: `/caminho/para/filme.<lang>.srt` (ex.: `filme.pt-BR.srt`, `filme.en.srt`). Isso permite manter legendas do mesmo vídeo em idiomas diferentes sem sobrescrever.
 
