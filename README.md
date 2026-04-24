@@ -42,12 +42,13 @@ subs-down-n-sync /caminho/para/filme.mkv -l es
 subs-down-n-sync /caminho/para/pasta/
 subs-down-n-sync /caminho/para/pasta/ --lang en
 subs-down-n-sync /caminho/para/pasta/ --overwrite   # sobrescreve legendas existentes
+subs-down-n-sync /caminho/para/pasta/ --parallel    # processa até 2 vídeos simultâneos
 
 # Ou via módulo Python
 python -m subs_down_n_sync /caminho/para/filme.mkv
 ```
 
-Ao passar um diretório, vídeos que já têm legenda (`<video>.<lang>.srt`) são pulados por padrão. Use `--overwrite` / `-o` para reprocessar.
+Ao passar um diretório, vídeos que já têm legenda (`<video>.<lang>.srt`) são pulados por padrão. Use `--overwrite` / `-o` para reprocessar. Use `--parallel` / `-p` para processar até 2 vídeos em paralelo.
 
 Saída: `/caminho/para/filme.<lang>.srt` (ex.: `filme.pt-BR.srt`, `filme.en.srt`). Isso permite manter legendas do mesmo vídeo em idiomas diferentes sem sobrescrever.
 

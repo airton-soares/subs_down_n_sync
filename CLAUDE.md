@@ -65,6 +65,7 @@ subs-down-n-sync /caminho/para/filme.mkv --lang en
 subs-down-n-sync /caminho/para/pasta/
 subs-down-n-sync /caminho/para/pasta/ --lang en
 subs-down-n-sync /caminho/para/pasta/ --overwrite   # sobrescreve legendas existentes
+subs-down-n-sync /caminho/para/pasta/ --parallel    # processa até 2 vídeos simultâneos
 
 # Via módulo Python
 python -m subs_down_n_sync /caminho/para/filme.mkv
