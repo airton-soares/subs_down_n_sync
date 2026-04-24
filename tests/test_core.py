@@ -851,3 +851,158 @@ def test_build_parser_overwrite_short_flag():
     parser = build_parser()
     args = parser.parse_args(["/any/path", "-o"])
     assert args.overwrite is True
+
+
+def test_run_directory_processes_all_videos(tmp_path, mocker):
+    from subs_down_n_sync.cli import _run_directory
+    from subs_down_n_sync.core import RunSummary
+
+    v1 = tmp_path / "a.mkv"
+    v2 = tmp_path / "b.mp4"
+    v1.write_bytes(b"\x00")
+    v2.write_bytes(b"\x00")
+
+    fake_summary = RunSummary(
+        output_path=tmp_path / "a.pt-BR.srt",
+        provider="opensubtitles",
+        match_type="hash",
+        synced=False,
+        offset_seconds=0.0,
+        sync_mode="none",
+        sync_error=None,
+        elapsed_seconds=0.1,
+        lang_tag="pt-BR",
+    )
+    mock_run = mocker.patch("subs_down_n_sync.cli.run", return_value=fake_summary)
+
+    results, skipped, errors = _run_directory(tmp_path, lang_tag="pt-BR", overwrite=False)
+
+    assert mock_run.call_count == 2
+    assert len(results) == 2
+    assert len(skipped) == 0
+    assert len(errors) == 0
+
+
+def test_run_directory_skips_when_srt_exists_and_no_overwrite(tmp_path, mocker):
+    from subs_down_n_sync.cli import _run_directory
+
+    v = tmp_path / "filme.mkv"
+    v.write_bytes(b"\x00")
+    srt = tmp_path / "filme.pt-BR.srt"
+    srt.write_text("legenda")
+
+    mock_run = mocker.patch("subs_down_n_sync.cli.run")
+
+    results, skipped, errors = _run_directory(tmp_path, lang_tag="pt-BR", overwrite=False)
+
+    mock_run.assert_not_called()
+    assert len(skipped) == 1
+    assert skipped[0] == v
+    assert len(results) == 0
+
+
+def test_run_directory_processes_when_srt_exists_and_overwrite_true(tmp_path, mocker):
+    from subs_down_n_sync.cli import _run_directory
+    from subs_down_n_sync.core import RunSummary
+
+    v = tmp_path / "filme.mkv"
+    v.write_bytes(b"\x00")
+    srt = tmp_path / "filme.pt-BR.srt"
+    srt.write_text("legenda")
+
+    fake_summary = RunSummary(
+        output_path=srt,
+        provider="opensubtitles",
+        match_type="hash",
+        synced=False,
+        offset_seconds=0.0,
+        sync_mode="none",
+        sync_error=None,
+        elapsed_seconds=0.1,
+        lang_tag="pt-BR",
+    )
+    mock_run = mocker.patch("subs_down_n_sync.cli.run", return_value=fake_summary)
+
+    results, skipped, errors = _run_directory(tmp_path, lang_tag="pt-BR", overwrite=True)
+
+    mock_run.assert_called_once()
+    assert len(results) == 1
+    assert len(skipped) == 0
+
+
+def test_run_directory_continues_after_error(tmp_path, mocker):
+    from subs_down_n_sync.cli import _run_directory
+    from subs_down_n_sync.core import RunSummary
+    from subs_down_n_sync.exceptions import SubsDownError
+
+    v1 = tmp_path / "a.mkv"
+    v2 = tmp_path / "b.mkv"
+    v1.write_bytes(b"\x00")
+    v2.write_bytes(b"\x00")
+
+    fake_summary = RunSummary(
+        output_path=tmp_path / "b.pt-BR.srt",
+        provider="opensubtitles",
+        match_type="hash",
+        synced=False,
+        offset_seconds=0.0,
+        sync_mode="none",
+        sync_error=None,
+        elapsed_seconds=0.1,
+        lang_tag="pt-BR",
+    )
+
+    def side_effect(path, **kwargs):
+        if "a.mkv" in path:
+            raise SubsDownError("falhou")
+        return fake_summary
+
+    mocker.patch("subs_down_n_sync.cli.run", side_effect=side_effect)
+
+    results, skipped, errors = _run_directory(tmp_path, lang_tag="pt-BR", overwrite=False)
+
+    assert len(results) == 1
+    assert len(errors) == 1
+    assert errors[0][0] == v1
+    assert "falhou" in errors[0][1]
+
+
+def test_run_directory_finds_videos_recursively(tmp_path, mocker):
+    from subs_down_n_sync.cli import _run_directory
+    from subs_down_n_sync.core import RunSummary
+
+    subdir = tmp_path / "sub"
+    subdir.mkdir()
+    v = subdir / "filme.mkv"
+    v.write_bytes(b"\x00")
+
+    fake_summary = RunSummary(
+        output_path=subdir / "filme.pt-BR.srt",
+        provider="opensubtitles",
+        match_type="hash",
+        synced=False,
+        offset_seconds=0.0,
+        sync_mode="none",
+        sync_error=None,
+        elapsed_seconds=0.1,
+        lang_tag="pt-BR",
+    )
+    mock_run = mocker.patch("subs_down_n_sync.cli.run", return_value=fake_summary)
+
+    results, skipped, errors = _run_directory(tmp_path, lang_tag="pt-BR", overwrite=False)
+
+    mock_run.assert_called_once()
+    assert len(results) == 1
+
+
+def test_run_directory_empty_dir_returns_empty_lists(tmp_path, mocker):
+    from subs_down_n_sync.cli import _run_directory
+
+    mock_run = mocker.patch("subs_down_n_sync.cli.run")
+
+    results, skipped, errors = _run_directory(tmp_path, lang_tag="pt-BR", overwrite=False)
+
+    mock_run.assert_not_called()
+    assert results == []
+    assert skipped == []
+    assert errors == []

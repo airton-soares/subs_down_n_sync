@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn, TimeElapsedColumn
 
-from subs_down_n_sync.core import DEFAULT_LANG, RunSummary, run
+from subs_down_n_sync.core import DEFAULT_LANG, VIDEO_EXTENSIONS, RunSummary, run
 from subs_down_n_sync.exceptions import SubsDownError
 
 console = Console()
@@ -82,6 +83,35 @@ def _print_summary(summary: RunSummary) -> None:
     )
 
     console.print(Panel(body, title="subs-down-n-sync", border_style=border))
+
+
+def _run_directory(
+    dir_path: Path,
+    lang_tag: str,
+    overwrite: bool,
+) -> tuple[list[RunSummary], list[Path], list[tuple[Path, str]]]:
+    videos = sorted(
+        p for p in dir_path.rglob("*") if p.suffix.lower() in VIDEO_EXTENSIONS
+    )
+
+    results: list[RunSummary] = []
+    skipped: list[Path] = []
+    errors: list[tuple[Path, str]] = []
+
+    for video in videos:
+        srt_path = video.with_suffix("").with_suffix(f".{lang_tag}.srt")
+
+        if srt_path.exists() and not overwrite:
+            skipped.append(video)
+            continue
+
+        try:
+            summary = run(str(video), lang_tag=lang_tag)
+            results.append(summary)
+        except SubsDownError as e:
+            errors.append((video, str(e)))
+
+    return results, skipped, errors
 
 
 def build_parser() -> argparse.ArgumentParser:
