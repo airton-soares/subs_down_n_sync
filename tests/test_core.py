@@ -823,3 +823,31 @@ def test_sync_subtitle_returns_not_synced_when_offset_below_threshold(tmp_path, 
 
     assert result.synced is False
     assert srt.read_text() == original_text
+
+
+def test_build_parser_accepts_directory_path(tmp_path):
+    from subs_down_n_sync.cli import build_parser
+    parser = build_parser()
+    args = parser.parse_args([str(tmp_path)])
+    assert args.path == str(tmp_path)
+
+
+def test_build_parser_overwrite_flag_defaults_to_false():
+    from subs_down_n_sync.cli import build_parser
+    parser = build_parser()
+    args = parser.parse_args(["/any/path"])
+    assert args.overwrite is False
+
+
+def test_build_parser_overwrite_flag_sets_true():
+    from subs_down_n_sync.cli import build_parser
+    parser = build_parser()
+    args = parser.parse_args(["/any/path", "--overwrite"])
+    assert args.overwrite is True
+
+
+def test_build_parser_overwrite_short_flag():
+    from subs_down_n_sync.cli import build_parser
+    parser = build_parser()
+    args = parser.parse_args(["/any/path", "-o"])
+    assert args.overwrite is True

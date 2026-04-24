@@ -87,16 +87,22 @@ def _print_summary(summary: RunSummary) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="subs-down-n-sync",
-        description="Busca e sincroniza legenda para um arquivo de vídeo.",
+        description="Busca e sincroniza legenda para arquivo(s) de vídeo.",
     )
-    parser.add_argument("video", help="Caminho para o arquivo de vídeo.")
+    parser.add_argument("path", help="Caminho para arquivo de vídeo ou diretório.")
     parser.add_argument(
         "-l",
         "--lang",
         default=DEFAULT_LANG,
         help=f"Código de idioma BCP 47 (ex: pt-BR, en, es). Default: {DEFAULT_LANG}.",
     )
-
+    parser.add_argument(
+        "-o",
+        "--overwrite",
+        action="store_true",
+        default=False,
+        help="Sobrescrever legendas existentes. Por padrão, vídeos com legenda já existente são pulados.",
+    )
     return parser
 
 
@@ -126,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
 
     with progress:
         try:
-            summary = run(args.video, lang_tag=args.lang, on_progress=on_progress)
+            summary = run(args.path, lang_tag=args.lang, on_progress=on_progress)
         except SubsDownError as e:
             progress.stop()
             err_console.print(f"[bold red]Erro:[/bold red] {e}")
