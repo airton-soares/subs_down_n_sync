@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "subs-down-n-sync"
-version = "1.0.1"
+version = "1.0.2"
 description = "CLI to download and sync subtitles for video files using semantic embeddings + DTW"
 requires-python = ">=3.12"
 authors = [{name = "Airton Soares", email = "airtonnsoares@gmail.com"}]

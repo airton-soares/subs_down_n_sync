@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.2 (2026-04-25)
+
+### Bug Fixes
+
+- Trocar badge de licença para fonte PyPI
+  ([`2f64ada`](https://github.com/airton-soares/subs_down_n_sync/commit/2f64ada4a31cc319bbcfa1e4742f5299f1fb8d76))
+
+
 ## v1.0.1 (2026-04-25)
 
 ### Bug Fixes
