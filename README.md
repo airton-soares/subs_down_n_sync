@@ -3,7 +3,7 @@
 ![CI](https://github.com/airton-soares/subs_down_n_sync/actions/workflows/ci.yml/badge.svg)
 [![PyPI version](https://img.shields.io/pypi/v/subs-down-n-sync)](https://pypi.org/project/subs-down-n-sync/)
 [![Python versions](https://img.shields.io/pypi/pyversions/subs-down-n-sync)](https://pypi.org/project/subs-down-n-sync/)
-[![License](https://img.shields.io/github/license/airton-soares/subs_down_n_sync)](LICENSE)
+[![License](https://img.shields.io/pypi/l/subs-down-n-sync)](LICENSE)
 
 CLI Python para baixar e sincronizar legendas para arquivos de vídeo. Idioma padrão: **pt-BR**, configurável via flag `--lang` (qualquer tag BCP 47).
 
