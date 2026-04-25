@@ -8,9 +8,27 @@ A sincronização usa embeddings semânticos multilíngues ([sentence-transforme
 
 ## Setup
 
+Linux/macOS:
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+```
+
+Windows (cmd.exe):
+
+```cmd
+python -m venv .venv
+.venv\Scripts\activate.bat
 pip install -e ".[dev]"
 ```
 
@@ -21,11 +39,35 @@ sudo apt install ffmpeg    # Debian/Ubuntu
 brew install ffmpeg        # macOS
 ```
 
+```powershell
+winget install Gyan.FFmpeg          # Windows (winget)
+choco install ffmpeg                # Windows (Chocolatey)
+scoop install ffmpeg                # Windows (Scoop)
+```
+
+Confirme que `ffmpeg` está no `PATH` rodando `ffmpeg -version` em novo terminal.
+
 ## Configuração (uma única vez)
+
+Linux/macOS:
 
 ```bash
 export OPENSUBTITLES_USERNAME="seu_usuario"
 export OPENSUBTITLES_PASSWORD="sua_senha"
+```
+
+Windows (PowerShell, sessão atual):
+
+```powershell
+$env:OPENSUBTITLES_USERNAME = "seu_usuario"
+$env:OPENSUBTITLES_PASSWORD = "sua_senha"
+```
+
+Windows (persistente, próximas sessões):
+
+```powershell
+setx OPENSUBTITLES_USERNAME "seu_usuario"
+setx OPENSUBTITLES_PASSWORD "sua_senha"
 ```
 
 ## Uso

@@ -1,8 +1,0 @@
-subliminal>=2.2
-setuptools<81
-
-[dev]
-pytest>=8.0
-pytest-mock>=3.12
-pytest-cov>=6.0
-ruff>=0.9
