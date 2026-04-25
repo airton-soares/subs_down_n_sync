@@ -5,7 +5,19 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "subs-down-n-sync"
 version = "0.1.0"
+description = "CLI to download and sync subtitles for video files using semantic embeddings + DTW"
 requires-python = ">=3.12"
+authors = [{name = "Airton Soares", email = "airtonnsoares@gmail.com"}]
+license = {text = "MIT"}
+keywords = ["subtitles", "subtitle-sync", "opensubtitles", "nlp", "cli", "video", "sentence-transformers", "dtw"]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "Environment :: Console",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Utilities",
+    "Natural Language :: Portuguese (Brazilian)",
+    "Operating System :: OS Independent",
+]
 dependencies = [
     "subliminal>=2.2",
     "sentence-transformers>=3.0",
@@ -16,6 +28,11 @@ dependencies = [
 
 [project.scripts]
 subs-down-n-sync = "subs_down_n_sync.cli:main"
+
+[project.urls]
+Homepage = "https://pypi.org/project/subs-down-n-sync/"
+Repository = "https://github.com/airton-soares/subs_down_n_sync"
+"Bug Tracker" = "https://github.com/airton-soares/subs_down_n_sync/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -47,3 +64,10 @@ source = ["src/subs_down_n_sync"]
 
 [tool.coverage.report]
 fail_under = 90
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+version_variables = ["src/subs_down_n_sync/__init__.py:__version__"]
+branch = "main"
+build_command = "pip install build && python -m build"
+commit_message = "chore(release): {version} [skip ci]"
