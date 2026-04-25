@@ -136,16 +136,3 @@ pytest                    # unit only (fast)
 pytest -m integration     # integration only (downloads embedding model, runs real DTW)
 pytest -m ""              # everything (unit + integration)
 ```
-
-## Manual smoke test
-
-To test the full pipeline against a real video on your disk, with real OpenSubtitles credentials:
-
-```bash
-export OPENSUBTITLES_USERNAME="..."
-export OPENSUBTITLES_PASSWORD="..."
-python scripts/smoke_test.py /path/to/movie.mkv
-python scripts/smoke_test.py /path/to/movie.mkv --lang en
-```
-
-This script consumes real OpenSubtitles API quota and **is not called by `pytest`**. Use it to validate the full end-to-end flow before a release or after changing download/sync logic.
