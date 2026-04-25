@@ -8,9 +8,27 @@ Synchronization uses multilingual semantic embeddings ([sentence-transformers](h
 
 ## Setup
 
+Linux/macOS:
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+```
+
+Windows (cmd.exe):
+
+```cmd
+python -m venv .venv
+.venv\Scripts\activate.bat
 pip install -e ".[dev]"
 ```
 
@@ -21,11 +39,35 @@ sudo apt install ffmpeg    # Debian/Ubuntu
 brew install ffmpeg        # macOS
 ```
 
+```powershell
+winget install Gyan.FFmpeg          # Windows (winget)
+choco install ffmpeg                # Windows (Chocolatey)
+scoop install ffmpeg                # Windows (Scoop)
+```
+
+Confirm `ffmpeg` is on your `PATH` by running `ffmpeg -version` in a new terminal.
+
 ## Configuration (once)
+
+Linux/macOS:
 
 ```bash
 export OPENSUBTITLES_USERNAME="your_username"
 export OPENSUBTITLES_PASSWORD="your_password"
+```
+
+Windows (PowerShell, current session):
+
+```powershell
+$env:OPENSUBTITLES_USERNAME = "your_username"
+$env:OPENSUBTITLES_PASSWORD = "your_password"
+```
+
+Windows (persistent, future sessions):
+
+```powershell
+setx OPENSUBTITLES_USERNAME "your_username"
+setx OPENSUBTITLES_PASSWORD "your_password"
 ```
 
 ## Usage

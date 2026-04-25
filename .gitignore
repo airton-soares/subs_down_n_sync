@@ -11,3 +11,4 @@ tests/fixtures/.cache/
 *.align_cache.json
 .ruff_cache/
 docs/superpowers/
+*.egg-info/
