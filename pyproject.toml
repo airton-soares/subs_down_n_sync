@@ -9,6 +9,7 @@ description = "CLI to download and sync subtitles for video files using semantic
 requires-python = ">=3.12"
 authors = [{name = "Airton Soares", email = "airtonnsoares@gmail.com"}]
 license = {text = "MIT"}
+readme = "README.md"
 keywords = ["subtitles", "subtitle-sync", "opensubtitles", "nlp", "cli", "video", "sentence-transformers", "dtw"]
 classifiers = [
     "Development Status :: 3 - Alpha",
