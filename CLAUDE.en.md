@@ -19,8 +19,6 @@ subs_down_n_sync/
 │   │   └── mini.srt
 │   ├── test_core.py             # unit tests
 │   └── test_integration.py      # integration tests (marker: integration)
-├── scripts/
-│   └── smoke_test.py            # manual test against real API
 ├── docs/
 ├── .github/workflows/ci.yml
 ├── .gitignore
