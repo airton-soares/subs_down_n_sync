@@ -19,7 +19,6 @@ classifiers = [
     "Topic :: Utilities",
     "Natural Language :: Portuguese (Brazilian)",
     "Operating System :: OS Independent",
-    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
 ]
 dependencies = [
     "subliminal>=2.2",
