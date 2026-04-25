@@ -61,6 +61,12 @@ export OPENSUBTITLES_PASSWORD="your_password"
 subs-down-n-sync /path/to/movie.mkv
 subs-down-n-sync /path/to/movie.mkv --lang en
 
+# Process an entire directory (recursive)
+subs-down-n-sync /path/to/folder/
+subs-down-n-sync /path/to/folder/ --lang en
+subs-down-n-sync /path/to/folder/ --overwrite   # overwrite existing subtitles
+subs-down-n-sync /path/to/folder/ --parallel    # process up to 2 videos in parallel
+
 # Via Python module
 python -m subs_down_n_sync /path/to/movie.mkv
 ```
