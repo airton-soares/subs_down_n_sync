@@ -4,7 +4,7 @@
 
 CLI Python para baixar e sincronizar legendas para arquivos de vídeo. Idioma padrão: **pt-BR**, configurável via flag `--lang` (qualquer tag BCP 47).
 
-A sincronização usa o modelo Whisper tiny via [stable-ts](https://github.com/jianfch/stable-ts): alinha os timestamps da legenda baixada ao áudio do vídeo. Legendas com match exato (hash ou release group) são usadas sem sincronização.
+A sincronização usa embeddings semânticos multilíngues ([sentence-transformers](https://www.sbert.net/), modelo `paraphrase-multilingual-MiniLM-L12-v2`) combinados com DTW: baixa uma legenda EN de referência e alinha os cues da legenda alvo aos timestamps da referência por similaridade semântica. Legendas com match exato (hash ou release group) são usadas sem sincronização.
 
 ## Setup
 
@@ -84,14 +84,14 @@ O CI falha se `ruff format --check` ou `ruff check` encontrarem problemas.
 
 O projeto tem duas camadas de testes:
 
-- **Testes unitários** (padrão, `pytest`) — rápidos, mockam `subliminal` e `stable_whisper`. Não precisam de rede nem de binários externos além do Python.
-- **Testes de integração** (`pytest -m integration`) — exercitam o `stable-ts` real com o trailer do Sintel (Blender Foundation, Creative Commons). O vídeo é baixado automaticamente na primeira execução e cacheado em `tests/fixtures/.cache/`. Requer `ffmpeg` no PATH e acesso à internet no primeiro run.
+- **Testes unitários** (padrão, `pytest`) — rápidos, mockam `subliminal` e `sentence_transformers`. Não precisam de rede nem de binários externos além do Python.
+- **Testes de integração** (`pytest -m integration`) — exercitam o pipeline real de alinhamento semântico (download do modelo `sentence-transformers` + DTW) sobre legendas reais. Requer acesso à internet no primeiro run para baixar o modelo (~120 MB), cacheado pelo Hugging Face em `~/.cache/huggingface/`.
 
 Como rodar cada camada:
 
 ```bash
 pytest                    # só unit (rápido)
-pytest -m integration     # só integração (baixa vídeo ~4 MB, roda stable-ts real)
+pytest -m integration     # só integração (baixa modelo de embeddings, roda DTW real)
 pytest -m ""              # tudo (unit + integração)
 ```
 

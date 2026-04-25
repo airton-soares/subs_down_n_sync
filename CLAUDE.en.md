@@ -76,7 +76,7 @@ python -m subs_down_n_sync /path/to/movie.mkv
 ```bash
 pytest                    # unit tests (default, with 90% coverage gate)
 pytest --no-cov           # no gate (useful with -k or --collect-only)
-pytest -m integration     # integration tests (requires ffmpeg, stable-ts and network)
+pytest -m integration     # integration tests (downloads sentence-transformers model, requires network)
 pytest -m ""              # everything (unit + integration)
 ```
 
