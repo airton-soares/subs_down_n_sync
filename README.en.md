@@ -1,10 +1,36 @@
 # subs_down_n_sync
 
 ![CI](https://github.com/airton-soares/subs_down_n_sync/actions/workflows/ci.yml/badge.svg)
+[![PyPI version](https://img.shields.io/pypi/v/subs-down-n-sync)](https://pypi.org/project/subs-down-n-sync/)
+[![Python versions](https://img.shields.io/pypi/pyversions/subs-down-n-sync)](https://pypi.org/project/subs-down-n-sync/)
+[![License](https://img.shields.io/github/license/airton-soares/subs_down_n_sync)](LICENSE)
 
 Python CLI for downloading and synchronizing subtitles for video files. Default language: **pt-BR**, configurable via `--lang` flag (any BCP 47 tag).
 
 Synchronization uses multilingual semantic embeddings ([sentence-transformers](https://www.sbert.net/), model `paraphrase-multilingual-MiniLM-L12-v2`) combined with DTW: downloads an EN reference subtitle and aligns target cues to the reference timestamps via semantic similarity. Subtitles with an exact match (hash or release group) are used without synchronization.
+
+## Installation
+
+```bash
+pip install subs-down-n-sync
+```
+
+Also install `ffmpeg`:
+
+```bash
+sudo apt install ffmpeg    # Debian/Ubuntu
+brew install ffmpeg        # macOS
+winget install Gyan.FFmpeg # Windows
+```
+
+Set your OpenSubtitles credentials:
+
+```bash
+export OPENSUBTITLES_USERNAME="your_username"
+export OPENSUBTITLES_PASSWORD="your_password"
+```
+
+> For development setup, see [Setup](#setup).
 
 ## Setup
 
