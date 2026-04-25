@@ -1,10 +1,36 @@
 # subs_down_n_sync
 
 ![CI](https://github.com/airton-soares/subs_down_n_sync/actions/workflows/ci.yml/badge.svg)
+[![PyPI version](https://img.shields.io/pypi/v/subs-down-n-sync)](https://pypi.org/project/subs-down-n-sync/)
+[![Python versions](https://img.shields.io/pypi/pyversions/subs-down-n-sync)](https://pypi.org/project/subs-down-n-sync/)
+[![License](https://img.shields.io/github/license/airton-soares/subs_down_n_sync)](LICENSE)
 
 CLI Python para baixar e sincronizar legendas para arquivos de vídeo. Idioma padrão: **pt-BR**, configurável via flag `--lang` (qualquer tag BCP 47).
 
 A sincronização usa embeddings semânticos multilíngues ([sentence-transformers](https://www.sbert.net/), modelo `paraphrase-multilingual-MiniLM-L12-v2`) combinados com DTW: baixa uma legenda EN de referência e alinha os cues da legenda alvo aos timestamps da referência por similaridade semântica. Legendas com match exato (hash ou release group) são usadas sem sincronização.
+
+## Instalação
+
+```bash
+pip install subs-down-n-sync
+```
+
+Instale também o `ffmpeg`:
+
+```bash
+sudo apt install ffmpeg    # Debian/Ubuntu
+brew install ffmpeg        # macOS
+winget install Gyan.FFmpeg # Windows
+```
+
+Configure as credenciais do OpenSubtitles:
+
+```bash
+export OPENSUBTITLES_USERNAME="seu_usuario"
+export OPENSUBTITLES_PASSWORD="sua_senha"
+```
+
+> Para desenvolvimento, veja [Setup](#setup).
 
 ## Setup
 

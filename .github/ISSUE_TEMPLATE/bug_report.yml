@@ -1,0 +1,62 @@
+name: Reportar bug
+description: Reporte um comportamento inesperado
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por reportar! Preencha o máximo de detalhes possível.
+
+  - type: input
+    id: version
+    attributes:
+      label: Versão do subs-down-n-sync
+      description: "`pip show subs-down-n-sync | grep Version`"
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Versão do Python
+      placeholder: "3.12.0"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Sistema operacional
+      placeholder: "Ubuntu 24.04 / macOS 14 / Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Comando executado
+      description: Inclua o output completo do terminal
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamento esperado
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportamento atual
+    validations:
+      required: true
+
+  - type: input
+    id: video
+    attributes:
+      label: Arquivo de vídeo (extensão e codec, se souber)
+      placeholder: ".mkv, H.264"

@@ -12,3 +12,4 @@ tests/fixtures/.cache/
 .ruff_cache/
 docs/superpowers/
 *.egg-info/
+dist/
