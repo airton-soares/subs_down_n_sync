@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.3 (2026-04-25)
+
+### Bug Fixes
+
+- Adicionar cache bust nos badges PyPI
+  ([`8d1989c`](https://github.com/airton-soares/subs_down_n_sync/commit/8d1989c1b432d3860294a8ad8c846f1bef2b4743))
+
+
 ## v1.0.2 (2026-04-25)
 
 ### Bug Fixes
