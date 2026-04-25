@@ -4,7 +4,7 @@
 
 Python CLI for downloading and synchronizing subtitles for video files. Default language: **pt-BR**, configurable via `--lang` flag (any BCP 47 tag).
 
-Synchronization uses the Whisper tiny model via [stable-ts](https://github.com/jianfch/stable-ts): aligns subtitle timestamps to the video's audio. Subtitles with an exact match (hash or release group) are used without synchronization.
+Synchronization uses multilingual semantic embeddings ([sentence-transformers](https://www.sbert.net/), model `paraphrase-multilingual-MiniLM-L12-v2`) combined with DTW: downloads an EN reference subtitle and aligns target cues to the reference timestamps via semantic similarity. Subtitles with an exact match (hash or release group) are used without synchronization.
 
 ## Setup
 
@@ -84,14 +84,14 @@ CI fails if `ruff format --check` or `ruff check` find any issues.
 
 The project has two test layers:
 
-- **Unit tests** (default, `pytest`) — fast, mock `subliminal` and `stable_whisper`. No network or external binaries required beyond Python.
-- **Integration tests** (`pytest -m integration`) — exercise real `stable-ts` with the Sintel trailer (Blender Foundation, Creative Commons). The video is downloaded automatically on first run and cached in `tests/fixtures/.cache/`. Requires `ffmpeg` in PATH and internet access on first run.
+- **Unit tests** (default, `pytest`) — fast, mock `subliminal` and `sentence_transformers`. No network or external binaries required beyond Python.
+- **Integration tests** (`pytest -m integration`) — exercise the real semantic alignment pipeline (`sentence-transformers` model download + DTW) over real subtitles. Requires internet access on first run to download the model (~120 MB), cached by Hugging Face under `~/.cache/huggingface/`.
 
 How to run each layer:
 
 ```bash
 pytest                    # unit only (fast)
-pytest -m integration     # integration only (downloads ~4 MB video, runs real stable-ts)
+pytest -m integration     # integration only (downloads embedding model, runs real DTW)
 pytest -m ""              # everything (unit + integration)
 ```
 
