@@ -1031,6 +1031,31 @@ def test_sync_subtitle_returns_not_synced_when_offset_below_threshold(tmp_path, 
     assert srt.read_text() == original_text
 
 
+def test_sync_subtitle_reads_latin1_encoded_file(tmp_path, mocker):
+    """Legenda em Latin-1 (cp1252) é lida corretamente e salva em UTF-8."""
+    srt = tmp_path / "Filme.pt-BR.srt"
+    content = "1\n00:00:02,000 --> 00:00:04,000\nação dramática\n\n2\n00:00:10,000 --> 00:00:12,000\ncoração\n"
+    srt.write_bytes(content.encode("latin-1"))
+
+    ref = tmp_path / "Filme.en.srt"
+    ref.write_text(
+        "1\n00:00:03,000 --> 00:00:05,000\ndramatic action\n\n2\n00:00:11,000 --> 00:00:13,000\nheart\n"
+    )
+
+    aligned_cues = [
+        {"start": 3.0, "end": 5.0, "text": "ação dramática"},
+        {"start": 11.0, "end": 13.0, "text": "coração"},
+    ]
+    mocker.patch("subs_down_n_sync.core._align_cues_by_semantics", return_value=aligned_cues)
+
+    result = sync_subtitle(srt, ref_path=ref)
+
+    assert result.synced is True
+    output = srt.read_text(encoding="utf-8")
+    assert "ação" in output
+    assert "coração" in output
+
+
 def test_build_parser_accepts_directory_path(tmp_path):
     from subs_down_n_sync.cli import build_parser
 
