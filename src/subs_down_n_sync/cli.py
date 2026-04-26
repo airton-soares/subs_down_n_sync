@@ -115,6 +115,7 @@ def _process_video(
     video: Path,
     lang_tag: str,
     progress: Progress,
+    resync: bool = False,
 ) -> RunSummary:
     task_id = progress.add_task(video.name, detail="aguardando...", total=None)
 
@@ -123,7 +124,7 @@ def _process_video(
         progress.update(task_id, description=f"{video.name} — {label}", detail=detail)
 
     try:
-        return run(str(video), lang_tag=lang_tag, on_progress=on_progress)
+        return run(str(video), lang_tag=lang_tag, on_progress=on_progress, resync=resync)
     finally:
         progress.remove_task(task_id)
 
@@ -131,7 +132,8 @@ def _process_video(
 def _run_directory(
     dir_path: Path,
     lang_tag: str,
-    overwrite: bool,
+    overwrite: bool = False,
+    resync: bool = False,
     parallel: bool = False,
 ) -> tuple[list[RunSummary], list[Path], list[tuple[Path, str]]]:
     videos = sorted(p for p in dir_path.rglob("*") if p.suffix.lower() in VIDEO_EXTENSIONS)
@@ -143,7 +145,7 @@ def _run_directory(
     to_process: list[Path] = []
     for video in videos:
         srt_path = video.with_suffix("").with_suffix(f".{lang_tag}.srt")
-        if srt_path.exists() and not overwrite:
+        if srt_path.exists() and not overwrite and not resync:
             skipped.append(video)
             continue
         to_process.append(video)
@@ -162,7 +164,8 @@ def _run_directory(
         if parallel:
             with ThreadPoolExecutor(max_workers=MAX_PARALLEL_WORKERS) as pool:
                 futures = {
-                    pool.submit(_process_video, v, lang_tag, progress): v for v in to_process
+                    pool.submit(_process_video, v, lang_tag, progress, False if overwrite else resync): v
+                    for v in to_process
                 }
                 for fut in as_completed(futures):
                     video = futures[fut]
@@ -174,7 +177,7 @@ def _run_directory(
         else:
             for video in to_process:
                 try:
-                    results.append(_process_video(video, lang_tag, progress))
+                    results.append(_process_video(video, lang_tag, progress, False if overwrite else resync))
                 except SubsDownError as e:
                     errors.append((video, str(e)))
                 progress.advance(overall)
@@ -256,6 +259,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "-r",
+        "--resync",
+        action="store_true",
+        default=False,
+        help=(
+            "Se legenda já existe no idioma alvo, usa-a diretamente para sincronização "
+            "sem buscar na API. Vídeos sem legenda existente são processados normalmente. "
+            "Ignorado se --overwrite for usado."
+        ),
+    )
+    parser.add_argument(
         "-p",
         "--parallel",
         action="store_true",
@@ -279,6 +293,7 @@ def main(argv: list[str] | None = None) -> int:
             p,
             lang_tag=args.lang,
             overwrite=args.overwrite,
+            resync=args.resync,
             parallel=args.parallel,
         )
         _print_batch_summary(results, skipped, errors)
@@ -310,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
 
     with progress:
         try:
-            summary = run(args.path, lang_tag=args.lang, on_progress=on_progress)
+            summary = run(args.path, lang_tag=args.lang, on_progress=on_progress, resync=args.resync)
         except SubsDownError as e:
             progress.stop()
             err_console.print(f"[bold red]Erro:[/bold red] {e}")
