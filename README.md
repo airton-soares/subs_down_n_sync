@@ -11,9 +11,33 @@ A sincronização usa embeddings semânticos multilíngues ([sentence-transforme
 
 ## Instalação
 
+### Recomendado: pipx
+
+[`pipx`](https://pipx.pypa.io/) instala ferramentas CLI em ambientes isolados e adiciona automaticamente ao `PATH`:
+
+```bash
+pipx install subs-down-n-sync
+```
+
+### Alternativa: pip
+
 ```bash
 pip install subs-down-n-sync
 ```
+
+Se aparecer o aviso `WARNING: The script subs-down-n-sync is installed in '...' which is not on PATH`, adicione o diretório ao `PATH`:
+
+```bash
+# Linux/macOS — adicione ao ~/.bashrc ou ~/.zshrc
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+```powershell
+# Windows (PowerShell) — adicione ao seu $PROFILE
+$env:PATH += ";$env:APPDATA\Python\Scripts"
+```
+
+Após editar o arquivo de perfil, reinicie o terminal ou rode `source ~/.bashrc` (Linux/macOS).
 
 Instale também o `ffmpeg`:
 

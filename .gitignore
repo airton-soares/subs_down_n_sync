@@ -13,3 +13,4 @@ tests/fixtures/.cache/
 docs/superpowers/
 *.egg-info/
 dist/
+.worktrees/
