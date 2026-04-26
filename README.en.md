@@ -1,8 +1,8 @@
 # subs_down_n_sync
 
 ![CI](https://github.com/airton-soares/subs_down_n_sync/actions/workflows/ci.yml/badge.svg)
-[![PyPI version](https://img.shields.io/pypi/v/subs-down-n-sync?v=1)](https://pypi.org/project/subs-down-n-sync/)
-[![Python versions](https://img.shields.io/pypi/pyversions/subs-down-n-sync?v=1)](https://pypi.org/project/subs-down-n-sync/)
+[![PyPI version](https://img.shields.io/pypi/v/subs-down-n-sync?v=2)](https://pypi.org/project/subs-down-n-sync/)
+[![Python versions](https://img.shields.io/pypi/pyversions/subs-down-n-sync?v=2)](https://pypi.org/project/subs-down-n-sync/)
 [![License](https://img.shields.io/pypi/l/subs-down-n-sync)](LICENSE)
 
 Python CLI for downloading and synchronizing subtitles for video files. Default language: **pt-BR**, configurable via `--lang` flag (any BCP 47 tag).
