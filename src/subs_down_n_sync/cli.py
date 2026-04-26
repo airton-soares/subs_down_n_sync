@@ -36,6 +36,7 @@ _STEP_LABELS: dict[str, str] = {
     "sincronizado": "Sincronização concluída",
     "sem_sync": "Legenda já sincronizada",
     "erro_sync": "Erro na sincronização",
+    "usando_existente": "Usando legenda existente...",
     "concluido": "Finalizado",
 }
 

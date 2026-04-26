@@ -650,6 +650,87 @@ def test_run_skips_sync_when_no_reference_available(tmp_path, monkeypatch, mocke
     assert summary.sync_error is not None
 
 
+def test_run_resync_uses_existing_subtitle_without_api(tmp_path, monkeypatch, mocker):
+    """resync=True + legenda existente → find_and_download_subtitle não chamada."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    srt = tmp_path / "Filme.pt-BR.srt"
+    srt.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+
+    mock_find = mocker.patch("subs_down_n_sync.core.find_and_download_subtitle")
+    ref_path = tmp_path / "Filme.en.srt"
+    mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=ref_path)
+    mocker.patch(
+        "subs_down_n_sync.core.sync_subtitle",
+        return_value=SyncResult(synced=True, offset_seconds=1.5, sync_mode="ref"),
+    )
+
+    summary = run(str(video), lang_tag="pt-BR", resync=True)
+
+    mock_find.assert_not_called()
+    assert summary.provider == "local"
+    assert summary.match_type == "existing"
+    assert summary.synced is True
+
+
+def test_run_resync_falls_back_to_api_when_no_existing_subtitle(tmp_path, monkeypatch, mocker):
+    """resync=True + sem legenda existente → fluxo normal (download da API)."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    # sem srt existente
+
+    downloaded_path = tmp_path / "Filme.pt-BR.srt"
+
+    def fake_find(video_path, language, credentials):
+        downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+        return (
+            downloaded_path,
+            SubtitleInfo(provider="opensubtitles", match_type="hash", needs_sync=False),
+        )
+
+    mock_find = mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
+
+    summary = run(str(video), lang_tag="pt-BR", resync=True)
+
+    mock_find.assert_called_once()
+    assert summary.provider == "opensubtitles"
+
+
+def test_run_resync_warns_but_does_not_rewrite_when_already_synced(tmp_path, monkeypatch, mocker):
+    """resync=True + legenda já sincronizada (offset < 0.1s) → synced=False, arquivo inalterado."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    original_content = "1\n00:00:01,000 --> 00:00:02,000\noi\n"
+    srt = tmp_path / "Filme.pt-BR.srt"
+    srt.write_text(original_content)
+
+    mocker.patch("subs_down_n_sync.core.find_and_download_subtitle")
+    ref_path = tmp_path / "Filme.en.srt"
+    mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=ref_path)
+    mocker.patch(
+        "subs_down_n_sync.core.sync_subtitle",
+        return_value=SyncResult(synced=False, offset_seconds=0.05, sync_mode="none"),
+    )
+
+    summary = run(str(video), lang_tag="pt-BR", resync=True)
+
+    assert summary.synced is False
+    assert summary.sync_error is None
+    assert srt.read_text() == original_content
+
+
 def test_find_reference_subtitle_returns_path_when_en_found(tmp_path, mocker):
     """find_reference_subtitle retorna path quando EN disponível."""
     video_path = tmp_path / "Filme.mkv"

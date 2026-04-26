@@ -478,6 +478,7 @@ def run(
     video_arg: str,
     lang_tag: str = DEFAULT_LANG,
     on_progress: ProgressCallback | None = None,
+    resync: bool = False,
 ) -> RunSummary:
     def _notify(step: str, detail: str = "") -> None:
         if on_progress:
@@ -491,11 +492,18 @@ def run(
     language = parse_language(lang_tag)
     credentials = load_credentials()
 
-    _notify("buscando", f"idioma={lang_tag}")
-    srt_path, info = find_and_download_subtitle(
-        video_path, language=language, credentials=credentials
-    )
-    _notify("baixado", f"provider={info.provider} match={info.match_type}")
+    srt_existing = video_path.with_suffix("").with_suffix(f".{lang_tag}.srt")
+
+    if resync and srt_existing.exists():
+        srt_path = srt_existing
+        info = SubtitleInfo(provider="local", match_type="existing", needs_sync=True)
+        _notify("usando_existente", str(srt_path))
+    else:
+        _notify("buscando", f"idioma={lang_tag}")
+        srt_path, info = find_and_download_subtitle(
+            video_path, language=language, credentials=credentials
+        )
+        _notify("baixado", f"provider={info.provider} match={info.match_type}")
 
     sync_error: str | None = None
 
