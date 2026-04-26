@@ -109,14 +109,15 @@ subs-down-n-sync /path/to/movie.mkv -l es
 # Process an entire directory (recursively scans for videos)
 subs-down-n-sync /path/to/folder/
 subs-down-n-sync /path/to/folder/ --lang en
-subs-down-n-sync /path/to/folder/ --overwrite   # overwrite existing subtitles
+subs-down-n-sync /path/to/folder/ --overwrite   # overwrite existing subtitles (re-download from API)
+subs-down-n-sync /path/to/folder/ --resync      # sync existing subtitle without hitting the API
 subs-down-n-sync /path/to/folder/ --parallel    # process up to 2 videos in parallel
 
 # Or via Python module
 python -m subs_down_n_sync /path/to/movie.mkv
 ```
 
-When passing a directory, videos that already have a subtitle (`<video>.<lang>.srt`) are skipped by default. Use `--overwrite` / `-o` to reprocess. Use `--parallel` / `-p` to process up to 2 videos concurrently.
+When passing a directory, videos that already have a subtitle (`<video>.<lang>.srt`) are skipped by default. Use `--overwrite` / `-o` to re-download from the API. Use `--resync` / `-r` to sync the existing subtitle without hitting the API (useful when the subtitle content is correct but out of sync). Use `--parallel` / `-p` to process up to 2 videos concurrently.
 
 Output: `/path/to/movie.<lang>.srt` (e.g. `movie.pt-BR.srt`, `movie.en.srt`). This allows keeping subtitles for the same video in different languages without overwriting.
 
