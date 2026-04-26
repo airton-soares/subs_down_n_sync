@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.1.2 (2026-04-26)
+
+### Bug Fixes
+
+- Corrigir detecção de legenda existente em nomes com pontos
+  ([`c21ccc4`](https://github.com/airton-soares/subs_down_n_sync/commit/c21ccc49550cf3fe5b73ca51d172777966229c49))
+
+### Chores
+
+- Adicionar .worktrees ao .gitignore
+  ([`b28a39d`](https://github.com/airton-soares/subs_down_n_sync/commit/b28a39d80033b307b5ee79019199cfdda3232685))
+
+### Documentation
+
+- Documentar pipx como instalação recomendada e corrigir PATH warning
+  ([`3e04986`](https://github.com/airton-soares/subs_down_n_sync/commit/3e049865b76a02c21e1611f534bc1ed5f1a7a9c5))
+
+
 ## v1.1.1 (2026-04-26)
 
 ### Bug Fixes
