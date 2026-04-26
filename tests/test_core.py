@@ -696,7 +696,9 @@ def test_run_resync_falls_back_to_api_when_no_existing_subtitle(tmp_path, monkey
             SubtitleInfo(provider="opensubtitles", match_type="hash", needs_sync=False),
         )
 
-    mock_find = mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
+    mock_find = mocker.patch(
+        "subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find
+    )
 
     summary = run(str(video), lang_tag="pt-BR", resync=True)
 
@@ -1250,7 +1252,9 @@ def test_main_passes_overwrite_flag_to_run_directory(tmp_path, mocker):
 
     main([str(tmp_path), "--overwrite"])
 
-    mock_run_dir.assert_called_once_with(tmp_path, lang_tag="pt-BR", overwrite=True, resync=False, parallel=False)
+    mock_run_dir.assert_called_once_with(
+        tmp_path, lang_tag="pt-BR", overwrite=True, resync=False, parallel=False
+    )
 
 
 def test_build_parser_parallel_flag_defaults_to_false():
@@ -1290,7 +1294,9 @@ def test_main_passes_parallel_flag_to_run_directory(tmp_path, mocker):
 
     main([str(tmp_path), "--parallel"])
 
-    mock_run_dir.assert_called_once_with(tmp_path, lang_tag="pt-BR", overwrite=False, resync=False, parallel=True)
+    mock_run_dir.assert_called_once_with(
+        tmp_path, lang_tag="pt-BR", overwrite=False, resync=False, parallel=True
+    )
 
 
 def test_run_directory_parallel_processes_all_videos(tmp_path, mocker):

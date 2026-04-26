@@ -163,8 +163,9 @@ def _run_directory(
     with progress:
         if parallel:
             with ThreadPoolExecutor(max_workers=MAX_PARALLEL_WORKERS) as pool:
+                effective_resync = False if overwrite else resync
                 futures = {
-                    pool.submit(_process_video, v, lang_tag, progress, False if overwrite else resync): v
+                    pool.submit(_process_video, v, lang_tag, progress, effective_resync): v
                     for v in to_process
                 }
                 for fut in as_completed(futures):
@@ -175,9 +176,10 @@ def _run_directory(
                         errors.append((video, str(e)))
                     progress.advance(overall)
         else:
+            effective_resync = False if overwrite else resync
             for video in to_process:
                 try:
-                    results.append(_process_video(video, lang_tag, progress, False if overwrite else resync))
+                    results.append(_process_video(video, lang_tag, progress, effective_resync))
                 except SubsDownError as e:
                     errors.append((video, str(e)))
                 progress.advance(overall)
@@ -325,7 +327,9 @@ def main(argv: list[str] | None = None) -> int:
 
     with progress:
         try:
-            summary = run(args.path, lang_tag=args.lang, on_progress=on_progress, resync=args.resync)
+            summary = run(
+                args.path, lang_tag=args.lang, on_progress=on_progress, resync=args.resync
+            )
         except SubsDownError as e:
             progress.stop()
             err_console.print(f"[bold red]Erro:[/bold red] {e}")
