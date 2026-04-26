@@ -325,6 +325,19 @@ def test_finalize_output_path_handles_different_lang_from_saved_name(tmp_path):
     assert not srt.exists()
 
 
+def test_finalize_output_path_preserves_dotted_name(tmp_path):
+    """Nome com múltiplos pontos (Serie.S01E01.1080p.mkv) → tag de idioma substitui só .mkv."""
+    video = tmp_path / "Serie.S01E01.1080p.mkv"
+    srt = tmp_path / "Serie.S01E01.1080p.pt-BR.srt"
+    srt.write_text("conteudo")
+
+    result = finalize_output_path(video, srt, "pt-BR")
+
+    assert result == tmp_path / "Serie.S01E01.1080p.pt-BR.srt"
+    assert result.exists()
+    assert result.read_text() == "conteudo"
+
+
 def test_run_full_pipeline_when_sync_needed(tmp_path, monkeypatch, mocker):
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
@@ -648,6 +661,33 @@ def test_run_skips_sync_when_no_reference_available(tmp_path, monkeypatch, mocke
     mock_sync.assert_not_called()
     assert summary.synced is False
     assert summary.sync_error is not None
+
+
+def test_run_resync_uses_existing_subtitle_dotted_name(tmp_path, monkeypatch, mocker):
+    """resync=True + nome com pontos (Serie.S01E01.1080p.mkv) → legenda existente encontrada."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Serie.S01E01.1080p.mkv"
+    video.write_bytes(b"\x00" * 10)
+    srt = tmp_path / "Serie.S01E01.1080p.pt-BR.srt"
+    srt.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+
+    mock_find = mocker.patch("subs_down_n_sync.core.find_and_download_subtitle")
+    ref_path = tmp_path / "Serie.S01E01.1080p.en.srt"
+    mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=ref_path)
+    mocker.patch(
+        "subs_down_n_sync.core.sync_subtitle",
+        return_value=SyncResult(synced=True, offset_seconds=1.5, sync_mode="ref"),
+    )
+
+    summary = run(str(video), lang_tag="pt-BR", resync=True)
+
+    mock_find.assert_not_called()
+    assert summary.provider == "local"
+    assert summary.match_type == "existing"
+    assert summary.synced is True
 
 
 def test_run_resync_uses_existing_subtitle_without_api(tmp_path, monkeypatch, mocker):

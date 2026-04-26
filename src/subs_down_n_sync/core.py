@@ -492,7 +492,7 @@ def run(
     language = parse_language(lang_tag)
     credentials = load_credentials()
 
-    srt_existing = video_path.with_suffix("").with_suffix(f".{lang_tag}.srt")
+    srt_existing = video_path.with_suffix(f".{lang_tag}.srt")
 
     if resync and srt_existing.exists():
         srt_path = srt_existing
