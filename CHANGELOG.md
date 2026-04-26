@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.1.0 (2026-04-26)
+
+### Documentation
+
+- Atualizar cache bust dos badges PyPI para v2
+  ([`1fbf8d0`](https://github.com/airton-soares/subs_down_n_sync/commit/1fbf8d0a1cb99000b7f25728a3887b63fea263a6))
+
+- Remover cache bust manual dos badges PyPI
+  ([`908e8e8`](https://github.com/airton-soares/subs_down_n_sync/commit/908e8e882d46235f521962fd55c70929e648f21c))
+
+### Features
+
+- Adicionar --resync na CLI mantendo --overwrite com prioridade
+  ([`f28e9e3`](https://github.com/airton-soares/subs_down_n_sync/commit/f28e9e3e813e586b11137355c6a3e6b50398691f))
+
+- Adicionar parâmetro resync em core.run() com desvio de download
+  ([`da41b30`](https://github.com/airton-soares/subs_down_n_sync/commit/da41b304873afad1c0fb31ac3f5a6e8ba3d5cdaa))
+
+
 ## v1.0.4 (2026-04-26)
 
 ### Bug Fixes
