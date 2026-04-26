@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v1.0.4 (2026-04-26)
+
+### Bug Fixes
+
+- Reduzir versão mínima do Python de 3.12 para 3.9
+  ([`fbe8928`](https://github.com/airton-soares/subs_down_n_sync/commit/fbe892818cd53e3993c6f733e282c9a20b3a932d))
+
+- Usar RELEASE_TOKEN no workflow de release
+  ([`93e528b`](https://github.com/airton-soares/subs_down_n_sync/commit/93e528bd3aaca0ff5d1b8828f786ea3affb2d3ed))
+
+### Continuous Integration
+
+- Re-trigger release pipeline
+  ([`4b3d2d1`](https://github.com/airton-soares/subs_down_n_sync/commit/4b3d2d15635289da768315f5241d149c362a054f))
+
+
 ## v1.0.3 (2026-04-25)
 
 ### Bug Fixes
