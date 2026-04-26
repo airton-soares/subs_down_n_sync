@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.1 (2026-04-26)
+
+### Bug Fixes
+
+- Corrigir linhas longas apontadas pelo ruff (E501)
+  ([`1fb4998`](https://github.com/airton-soares/subs_down_n_sync/commit/1fb4998e0fb71a9596039a4539f703a20d683f81))
+
+
 ## v1.1.0 (2026-04-26)
 
 ### Documentation
