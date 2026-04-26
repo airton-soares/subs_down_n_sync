@@ -11,6 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import charset_normalizer
 import numpy as np
 import subliminal
 from babelfish import Language
@@ -145,8 +146,10 @@ def _filename_similarity(sub_filename: str, video_name: str) -> float:
     video_stem = Path(video_name).stem
     sub_tokens = set(norm.sub(" ", sub_filename.lower()).split())
     video_tokens = set(norm.sub(" ", video_stem.lower()).split())
+    
     if not video_tokens:
         return 0.0
+    
     return len(sub_tokens & video_tokens) / len(video_tokens)
 
 
@@ -433,16 +436,23 @@ def _cues_to_srt(cues: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _read_text_detected(path: Path) -> str:
+    raw = path.read_bytes()
+    result = charset_normalizer.from_bytes(raw).best()
+    encoding = str(result.encoding) if result else "utf-8"
+    return raw.decode(encoding, errors="replace")
+
+
 def sync_subtitle(
     srt_path: Path,
     ref_path: Path,
 ) -> SyncResult:
     """Alinha legenda alvo usando legenda EN de referência via embeddings semânticos."""
-    target_text = srt_path.read_text(encoding="utf-8", errors="replace")
+    target_text = _read_text_detected(srt_path)
     target_cues = _srt_to_segments(target_text)
     target_ts_orig = [c["start"] for c in target_cues]
 
-    ref_text = ref_path.read_text(encoding="utf-8", errors="replace")
+    ref_text = _read_text_detected(ref_path)
     ref_cues = _srt_to_segments(ref_text)
 
     try:
