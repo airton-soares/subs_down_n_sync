@@ -10,6 +10,7 @@ from subs_down_n_sync.core import (
     SubtitleInfo,
     SyncResult,
     _align_cues_by_semantics,
+    _compute_needs_sync,
     _filename_similarity,
     _mean_offset_seconds,
     _parse_srt_timestamps,
@@ -508,6 +509,39 @@ def test_filename_similarity_prefers_closer_release(stub_subliminal):
         "Raising.Hope.S01E03.720p.HDTV.X264-MRSK.mkv",
     )
     assert score_close > score_far
+
+
+# --- testes para _compute_needs_sync ---
+
+
+def test_compute_needs_sync_hash_always_false():
+    assert _compute_needs_sync("hash", 0.0) is False
+    assert _compute_needs_sync("hash", 1.0) is False
+
+
+def test_compute_needs_sync_release_always_false():
+    assert _compute_needs_sync("release", 0.0) is False
+    assert _compute_needs_sync("release", 1.0) is False
+
+
+def test_compute_needs_sync_fallback_below_threshold_is_true():
+    assert _compute_needs_sync("fallback", 0.89) is True
+
+
+def test_compute_needs_sync_fallback_at_threshold_is_false():
+    assert _compute_needs_sync("fallback", 0.9) is False
+
+
+def test_compute_needs_sync_fallback_above_threshold_is_false():
+    assert _compute_needs_sync("fallback", 1.0) is False
+
+
+def test_compute_needs_sync_existing_below_threshold_is_true():
+    assert _compute_needs_sync("existing", 0.5) is True
+
+
+def test_compute_needs_sync_existing_at_threshold_is_false():
+    assert _compute_needs_sync("existing", 0.9) is False
 
 
 # --- testes para lógica de needs_sync ---

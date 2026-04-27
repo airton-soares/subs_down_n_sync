@@ -146,11 +146,22 @@ def _filename_similarity(sub_filename: str, video_name: str) -> float:
     video_stem = Path(video_name).stem
     sub_tokens = set(norm.sub(" ", sub_filename.lower()).split())
     video_tokens = set(norm.sub(" ", video_stem.lower()).split())
-    
+
     if not video_tokens:
         return 0.0
-    
+
     return len(sub_tokens & video_tokens) / len(video_tokens)
+
+
+def _compute_needs_sync(match_type: str, similarity: float) -> bool:
+    """Decide se legenda precisa de sincronização.
+
+    Hash e release matches são confiáveis → sem sync.
+    Fallback e existing dependem da similaridade → sync se < threshold.
+    """
+    if match_type in ("hash", "release"):
+        return False
+    return similarity < SCORE_THRESHOLD
 
 
 def _pick_subtitle(
