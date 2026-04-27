@@ -203,32 +203,6 @@ def _pick_subtitle(
     return best_sub, match_type, needs_sync
 
 
-def _download_sub(
-    video: object,
-    language: Language,
-    provider_configs: dict,
-) -> object | None:
-    """Busca e baixa melhor legenda disponível para o idioma. Retorna subtitle ou None."""
-    results = subliminal.list_subtitles(
-        {video},
-        {language},
-        providers=["opensubtitles"],
-        provider_configs=provider_configs,
-    )
-    candidates = results.get(video, [])
-    candidates = [s for s in candidates if getattr(s, "language", None) == language]
-
-    if not candidates:
-        return None
-
-    scored = [(sub, compute_score(sub, video)) for sub in candidates]
-    scored.sort(key=lambda x: x[1], reverse=True)
-    best = scored[0][0]
-
-    subliminal.download_subtitles([best], provider_configs=provider_configs)
-    return best if best.text else None
-
-
 def find_and_download_subtitle(
     video_path: Path,
     language: Language,
@@ -288,8 +262,22 @@ def find_reference_subtitle(
     en = Language("eng")
     provider_configs = {"opensubtitles": {"username": user, "password": pwd}}
 
-    subtitle = _download_sub(video, en, provider_configs)
-    if subtitle is None:
+    results = subliminal.list_subtitles(
+        {video},
+        {en},
+        providers=["opensubtitles"],
+        provider_configs=provider_configs,
+    )
+    candidates = results.get(video, [])
+    target_candidates = [s for s in candidates if getattr(s, "language", None) == en]
+
+    if not target_candidates:
+        return None
+
+    subtitle, _, _ = _pick_subtitle(target_candidates, video)
+
+    subliminal.download_subtitles([subtitle], provider_configs=provider_configs)
+    if not subtitle.text:
         return None
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="subs_ref_"))

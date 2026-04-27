@@ -872,6 +872,39 @@ def test_find_reference_subtitle_returns_none_when_en_not_found(tmp_path, mocker
     assert ref_path is None
 
 
+def test_find_reference_subtitle_uses_pick_subtitle(tmp_path, mocker):
+    """find_reference_subtitle usa _pick_subtitle para seleção (hash > release > fallback)."""
+    fake_video = Episode("Filme.S01E01", "Filme", 1, 1)
+    mocker.patch("subs_down_n_sync.core.subliminal.scan_video", return_value=fake_video)
+    mocker.patch("subs_down_n_sync.core.hash_refine")
+
+    fake_sub = mocker.MagicMock()
+    fake_sub.text = "1\n00:00:01,000 --> 00:00:02,000\nhello\n"
+    fake_sub.get_path.return_value = "Filme.en.srt"
+    fake_sub.language = Language("eng")
+    fake_sub.get_matches.return_value = {"hash"}
+    fake_sub.filename = "Filme.en.srt"
+
+    mocker.patch(
+        "subs_down_n_sync.core.subliminal.list_subtitles",
+        return_value={fake_video: [fake_sub]},
+    )
+    mocker.patch("subs_down_n_sync.core.subliminal.download_subtitles")
+
+    mock_pick = mocker.patch(
+        "subs_down_n_sync.core._pick_subtitle",
+        return_value=(fake_sub, "hash", False),
+    )
+
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+
+    result = find_reference_subtitle(video_path, credentials=("u", "p"))
+
+    mock_pick.assert_called_once()
+    assert result is not None
+
+
 def test_align_cues_by_semantics_simple_1to1(mocker):
     """Alinhamento 1:1: cues semânticamente equivalentes recebem timestamps da ref."""
     import numpy as np
