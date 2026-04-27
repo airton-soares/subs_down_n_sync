@@ -35,7 +35,7 @@ DEFAULT_LANG = "pt-BR"
 
 SCORE_THRESHOLD = 0.9  # score/max_score >= 90% → sem sync
 
-SYNC_THRESHOLD_SECONDS = 0.1
+SYNC_THRESHOLD_SECONDS = 0.2
 
 _TS_RE = re.compile(
     r"^(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}",

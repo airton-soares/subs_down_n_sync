@@ -83,7 +83,7 @@ def _print_summary(summary: RunSummary) -> None:
         border = "green"
     else:
         status_line = (
-            f"[cyan]Já sincronizada[/cyan] (offset médio: {summary.offset_seconds:.2f}s < 0.10s)"
+            f"[cyan]Já sincronizada[/cyan] (offset médio: {summary.offset_seconds:.2f}s < 0.20s)"
         )
         border = "cyan"
 

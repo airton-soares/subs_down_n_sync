@@ -798,7 +798,7 @@ def test_run_resync_falls_back_to_api_when_no_existing_subtitle(tmp_path, monkey
 
 
 def test_run_resync_warns_but_does_not_rewrite_when_already_synced(tmp_path, monkeypatch, mocker):
-    """resync=True + legenda já sincronizada (offset < 0.1s) → synced=False, arquivo inalterado."""
+    """resync=True + legenda já sincronizada (offset < 0.2s) → synced=False, arquivo inalterado."""
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
