@@ -719,7 +719,7 @@ def test_run_skips_sync_when_no_reference_available(tmp_path, monkeypatch, mocke
 
 
 def test_run_resync_uses_existing_subtitle_dotted_name(tmp_path, monkeypatch, mocker):
-    """resync=True + nome com pontos (Serie.S01E01.1080p.mkv) → legenda existente encontrada."""
+    """resync=True + nome com pontos (Serie.S01E01.1080p.mkv) → legenda existente encontrada, alta similaridade → sem sync."""
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
@@ -731,22 +731,20 @@ def test_run_resync_uses_existing_subtitle_dotted_name(tmp_path, monkeypatch, mo
 
     mock_find = mocker.patch("subs_down_n_sync.core.find_and_download_subtitle")
     ref_path = tmp_path / "Serie.S01E01.1080p.en.srt"
+    mock_sync = mocker.patch("subs_down_n_sync.core.sync_subtitle")
     mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=ref_path)
-    mocker.patch(
-        "subs_down_n_sync.core.sync_subtitle",
-        return_value=SyncResult(synced=True, offset_seconds=1.5, sync_mode="ref"),
-    )
 
     summary = run(str(video), lang_tag="pt-BR", resync=True)
 
     mock_find.assert_not_called()
+    mock_sync.assert_not_called()  # alta similaridade → sem sync
     assert summary.provider == "local"
     assert summary.match_type == "existing"
-    assert summary.synced is True
+    assert summary.synced is False
 
 
 def test_run_resync_uses_existing_subtitle_without_api(tmp_path, monkeypatch, mocker):
-    """resync=True + legenda existente → find_and_download_subtitle não chamada."""
+    """resync=True + legenda existente → find_and_download_subtitle não chamada; alta similaridade → sem sync."""
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
@@ -758,18 +756,16 @@ def test_run_resync_uses_existing_subtitle_without_api(tmp_path, monkeypatch, mo
 
     mock_find = mocker.patch("subs_down_n_sync.core.find_and_download_subtitle")
     ref_path = tmp_path / "Filme.en.srt"
+    mock_sync = mocker.patch("subs_down_n_sync.core.sync_subtitle")
     mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=ref_path)
-    mocker.patch(
-        "subs_down_n_sync.core.sync_subtitle",
-        return_value=SyncResult(synced=True, offset_seconds=1.5, sync_mode="ref"),
-    )
 
     summary = run(str(video), lang_tag="pt-BR", resync=True)
 
     mock_find.assert_not_called()
+    mock_sync.assert_not_called()  # alta similaridade → sem sync
     assert summary.provider == "local"
     assert summary.match_type == "existing"
-    assert summary.synced is True
+    assert summary.synced is False
 
 
 def test_run_resync_falls_back_to_api_when_no_existing_subtitle(tmp_path, monkeypatch, mocker):
@@ -1569,3 +1565,48 @@ def test_run_directory_overwrite_wins_over_resync(tmp_path, mocker):
     call_kwargs = mock_run.call_args.kwargs
     assert call_kwargs.get("resync") is False  # overwrite vence
     assert len(results) == 1
+
+
+def test_run_resync_with_high_similarity_skips_sync(tmp_path, monkeypatch, mocker):
+    """Resync com filename de alta similaridade → needs_sync=False, sync não chamado."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    srt = tmp_path / "Filme.pt-BR.srt"
+    srt.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+
+    mock_sync = mocker.patch("subs_down_n_sync.core.sync_subtitle")
+
+    summary = run(str(video), lang_tag="pt-BR", resync=True)
+
+    mock_sync.assert_not_called()
+    assert summary.match_type == "existing"
+
+
+def test_run_resync_with_low_similarity_calls_sync(tmp_path, monkeypatch, mocker):
+    """Resync com filename de baixa similaridade → needs_sync=True, sync chamado."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.2024.1080p.BluRay.x264.mkv"
+    video.write_bytes(b"\x00" * 10)
+    srt = tmp_path / "Filme.2024.1080p.BluRay.x264.pt-BR.srt"
+    srt.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+
+    ref = tmp_path / "Filme.en.srt"
+    mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=ref)
+    mock_sync = mocker.patch(
+        "subs_down_n_sync.core.sync_subtitle",
+        return_value=SyncResult(synced=True, offset_seconds=0.5),
+    )
+
+    mocker.patch("subs_down_n_sync.core._filename_similarity", return_value=0.3)
+
+    summary = run(str(video), lang_tag="pt-BR", resync=True)
+
+    mock_sync.assert_called_once()
+    assert summary.match_type == "existing"

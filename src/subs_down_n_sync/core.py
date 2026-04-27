@@ -520,7 +520,9 @@ def run(
 
     if resync and srt_existing.exists():
         srt_path = srt_existing
-        info = SubtitleInfo(provider="local", match_type="existing", needs_sync=True)
+        similarity = _filename_similarity(srt_existing.name, video_path.name)
+        needs_sync = _compute_needs_sync("existing", similarity)
+        info = SubtitleInfo(provider="local", match_type="existing", needs_sync=needs_sync)
         _notify("usando_existente", str(srt_path))
     else:
         _notify("buscando", f"idioma={lang_tag}")
