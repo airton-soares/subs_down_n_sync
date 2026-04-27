@@ -328,7 +328,11 @@ def main(argv: list[str] | None = None) -> int:
     with progress:
         try:
             summary = run(
-                args.path, lang_tag=args.lang, on_progress=on_progress, resync=args.resync
+                args.path,
+                lang_tag=args.lang,
+                on_progress=on_progress,
+                resync=args.resync,
+                overwrite=args.overwrite,
             )
         except SubsDownError as e:
             progress.stop()

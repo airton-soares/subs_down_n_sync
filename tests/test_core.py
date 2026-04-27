@@ -824,6 +824,77 @@ def test_run_resync_warns_but_does_not_rewrite_when_already_synced(tmp_path, mon
     assert srt.read_text() == original_content
 
 
+def test_run_skips_when_srt_exists_and_no_overwrite(tmp_path, monkeypatch, mocker):
+    """Legenda já existe e overwrite=False → retorna imediatamente sem download."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    srt = tmp_path / "Filme.pt-BR.srt"
+    srt.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+
+    mock_find = mocker.patch("subs_down_n_sync.core.find_and_download_subtitle")
+
+    summary = run(str(video), lang_tag="pt-BR", overwrite=False)
+
+    mock_find.assert_not_called()
+    assert summary.match_type == "skipped"
+
+
+def test_run_downloads_when_srt_exists_and_overwrite_true(tmp_path, monkeypatch, mocker):
+    """Legenda já existe mas overwrite=True → download acontece."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    srt = tmp_path / "Filme.pt-BR.srt"
+    srt.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+
+    downloaded_path = tmp_path / "Filme.pt-BR.srt"
+
+    def fake_find(video_path, language, credentials):
+        downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+        return (
+            downloaded_path,
+            SubtitleInfo(provider="opensubtitles", match_type="hash", needs_sync=False),
+        )
+
+    mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
+
+    summary = run(str(video), lang_tag="pt-BR", overwrite=True)
+
+    assert summary.match_type == "hash"
+
+
+def test_run_downloads_when_srt_missing_regardless_of_overwrite(tmp_path, monkeypatch, mocker):
+    """Legenda não existe → download independente do overwrite."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+
+    downloaded_path = tmp_path / "Filme.pt-BR.srt"
+
+    def fake_find(video_path, language, credentials):
+        downloaded_path.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+        return (
+            downloaded_path,
+            SubtitleInfo(provider="opensubtitles", match_type="hash", needs_sync=False),
+        )
+
+    mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
+
+    summary = run(str(video), lang_tag="pt-BR", overwrite=False)
+
+    assert summary.match_type == "hash"
+
+
 def test_find_reference_subtitle_returns_path_when_en_found(tmp_path, mocker):
     """find_reference_subtitle retorna path quando EN disponível."""
     video_path = tmp_path / "Filme.mkv"

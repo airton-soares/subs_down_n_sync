@@ -491,6 +491,7 @@ def run(
     lang_tag: str = DEFAULT_LANG,
     on_progress: ProgressCallback | None = None,
     resync: bool = False,
+    overwrite: bool = False,
 ) -> RunSummary:
     def _notify(step: str, detail: str = "") -> None:
         if on_progress:
@@ -505,6 +506,21 @@ def run(
     credentials = load_credentials()
 
     srt_existing = video_path.with_suffix(f".{lang_tag}.srt")
+
+    if srt_existing.exists() and not overwrite and not resync:
+        elapsed = time.monotonic() - start
+        _notify("concluido", str(srt_existing))
+        return RunSummary(
+            output_path=srt_existing,
+            provider="local",
+            match_type="skipped",
+            synced=False,
+            offset_seconds=0.0,
+            sync_mode="none",
+            sync_error=None,
+            elapsed_seconds=elapsed,
+            lang_tag=lang_tag,
+        )
 
     if resync and srt_existing.exists():
         srt_path = srt_existing
