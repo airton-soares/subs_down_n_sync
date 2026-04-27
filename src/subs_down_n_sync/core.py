@@ -35,7 +35,7 @@ DEFAULT_LANG = "pt-BR"
 
 SCORE_THRESHOLD = 0.9  # score/max_score >= 90% → sem sync
 
-SYNC_THRESHOLD_SECONDS = 0.1
+SYNC_THRESHOLD_SECONDS = 0.2
 
 _TS_RE = re.compile(
     r"^(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}",
@@ -131,26 +131,28 @@ def parse_language(raw: str) -> Language:
         ) from e
 
 
-def _classify_match(matches: set[str]) -> str:
-    if "hash" in matches:
-        return "hash"
-    if "release_group" in matches:
-        return "release"
-
-    return "fallback"
-
-
 def _filename_similarity(sub_filename: str, video_name: str) -> float:
     """Fração de tokens do stem do vídeo presentes no nome da legenda."""
     norm = re.compile(r"[\W_]+")
     video_stem = Path(video_name).stem
     sub_tokens = set(norm.sub(" ", sub_filename.lower()).split())
     video_tokens = set(norm.sub(" ", video_stem.lower()).split())
-    
+
     if not video_tokens:
         return 0.0
-    
+
     return len(sub_tokens & video_tokens) / len(video_tokens)
+
+
+def _compute_needs_sync(match_type: str, similarity: float) -> bool:
+    """Decide se legenda precisa de sincronização.
+
+    Hash e release matches são confiáveis → sem sync.
+    Fallback e existing dependem da similaridade → sync se < threshold.
+    """
+    if match_type in ("hash", "release"):
+        return False
+    return similarity < SCORE_THRESHOLD
 
 
 def _pick_subtitle(
@@ -182,37 +184,14 @@ def _pick_subtitle(
     pool = release_candidates if release_candidates else scored
     match_type = "release" if release_candidates else "fallback"
 
-    best_sub = max(
-        pool,
-        key=lambda x: _filename_similarity(getattr(x[0], "filename", "") or "", video_name),
-    )[0]
-    return best_sub, match_type, True
-
-
-def _download_sub(
-    video: object,
-    language: Language,
-    provider_configs: dict,
-) -> object | None:
-    """Busca e baixa melhor legenda disponível para o idioma. Retorna subtitle ou None."""
-    results = subliminal.list_subtitles(
-        {video},
-        {language},
-        providers=["opensubtitles"],
-        provider_configs=provider_configs,
-    )
-    candidates = results.get(video, [])
-    candidates = [s for s in candidates if getattr(s, "language", None) == language]
-
-    if not candidates:
-        return None
-
-    scored = [(sub, compute_score(sub, video)) for sub in candidates]
-    scored.sort(key=lambda x: x[1], reverse=True)
-    best = scored[0][0]
-
-    subliminal.download_subtitles([best], provider_configs=provider_configs)
-    return best if best.text else None
+    # calcula similarity uma vez por candidato e escolhe o melhor
+    pool_with_sim = [
+        (sub, score, _filename_similarity(getattr(sub, "filename", "") or "", video_name))
+        for sub, score in pool
+    ]
+    best_sub, _, best_similarity = max(pool_with_sim, key=lambda x: x[2])
+    needs_sync = _compute_needs_sync(match_type, best_similarity)
+    return best_sub, match_type, needs_sync
 
 
 def find_and_download_subtitle(
@@ -274,8 +253,22 @@ def find_reference_subtitle(
     en = Language("eng")
     provider_configs = {"opensubtitles": {"username": user, "password": pwd}}
 
-    subtitle = _download_sub(video, en, provider_configs)
-    if subtitle is None:
+    results = subliminal.list_subtitles(
+        {video},
+        {en},
+        providers=["opensubtitles"],
+        provider_configs=provider_configs,
+    )
+    candidates = results.get(video, [])
+    target_candidates = [s for s in candidates if getattr(s, "language", None) == en]
+
+    if not target_candidates:
+        return None
+
+    subtitle, _, _ = _pick_subtitle(target_candidates, video)
+
+    subliminal.download_subtitles([subtitle], provider_configs=provider_configs)
+    if not subtitle.text:
         return None
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="subs_ref_"))
@@ -489,6 +482,7 @@ def run(
     lang_tag: str = DEFAULT_LANG,
     on_progress: ProgressCallback | None = None,
     resync: bool = False,
+    overwrite: bool = False,
 ) -> RunSummary:
     def _notify(step: str, detail: str = "") -> None:
         if on_progress:
@@ -504,9 +498,26 @@ def run(
 
     srt_existing = video_path.with_suffix(f".{lang_tag}.srt")
 
+    if srt_existing.exists() and not overwrite and not resync:
+        elapsed = time.monotonic() - start
+        _notify("concluido", str(srt_existing))
+        return RunSummary(
+            output_path=srt_existing,
+            provider="local",
+            match_type="skipped",
+            synced=False,
+            offset_seconds=0.0,
+            sync_mode="none",
+            sync_error=None,
+            elapsed_seconds=elapsed,
+            lang_tag=lang_tag,
+        )
+
     if resync and srt_existing.exists():
         srt_path = srt_existing
-        info = SubtitleInfo(provider="local", match_type="existing", needs_sync=True)
+        similarity = _filename_similarity(srt_existing.name, video_path.name)
+        needs_sync = _compute_needs_sync("existing", similarity)
+        info = SubtitleInfo(provider="local", match_type="existing", needs_sync=needs_sync)
         _notify("usando_existente", str(srt_path))
     else:
         _notify("buscando", f"idioma={lang_tag}")
