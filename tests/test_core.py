@@ -719,7 +719,10 @@ def test_run_skips_sync_when_no_reference_available(tmp_path, monkeypatch, mocke
 
 
 def test_run_resync_uses_existing_subtitle_dotted_name(tmp_path, monkeypatch, mocker):
-    """resync=True + nome com pontos (Serie.S01E01.1080p.mkv) → legenda existente encontrada, alta similaridade → sem sync."""
+    """resync=True + nome com pontos (Serie.S01E01.1080p.mkv) → legenda existente encontrada.
+
+    Alta similaridade → sem sync.
+    """
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
@@ -744,7 +747,10 @@ def test_run_resync_uses_existing_subtitle_dotted_name(tmp_path, monkeypatch, mo
 
 
 def test_run_resync_uses_existing_subtitle_without_api(tmp_path, monkeypatch, mocker):
-    """resync=True + legenda existente → find_and_download_subtitle não chamada; alta similaridade → sem sync."""
+    """resync=True + legenda existente → find_and_download_subtitle não chamada.
+
+    Alta similaridade → sem sync.
+    """
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
@@ -1189,12 +1195,16 @@ def test_sync_subtitle_returns_not_synced_when_offset_below_threshold(tmp_path, 
 def test_sync_subtitle_reads_latin1_encoded_file(tmp_path, mocker):
     """Legenda em Latin-1 (cp1252) é lida corretamente e salva em UTF-8."""
     srt = tmp_path / "Filme.pt-BR.srt"
-    content = "1\n00:00:02,000 --> 00:00:04,000\nação dramática\n\n2\n00:00:10,000 --> 00:00:12,000\ncoração\n"
+    content = (
+        "1\n00:00:02,000 --> 00:00:04,000\nação dramática\n\n"
+        "2\n00:00:10,000 --> 00:00:12,000\ncoração\n"
+    )
     srt.write_bytes(content.encode("latin-1"))
 
     ref = tmp_path / "Filme.en.srt"
     ref.write_text(
-        "1\n00:00:03,000 --> 00:00:05,000\ndramatic action\n\n2\n00:00:11,000 --> 00:00:13,000\nheart\n"
+        "1\n00:00:03,000 --> 00:00:05,000\ndramatic action\n\n"
+        "2\n00:00:11,000 --> 00:00:13,000\nheart\n"
     )
 
     aligned_cues = [
