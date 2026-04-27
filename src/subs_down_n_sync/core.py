@@ -197,7 +197,9 @@ def _pick_subtitle(
         pool,
         key=lambda x: _filename_similarity(getattr(x[0], "filename", "") or "", video_name),
     )[0]
-    return best_sub, match_type, True
+    similarity = _filename_similarity(getattr(best_sub, "filename", "") or "", video_name)
+    needs_sync = _compute_needs_sync(match_type, similarity)
+    return best_sub, match_type, needs_sync
 
 
 def _download_sub(

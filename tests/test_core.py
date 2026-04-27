@@ -567,8 +567,8 @@ def test_needs_sync_false_when_hash_match(tmp_path, stub_subliminal, mocker):
     assert info.match_type == "hash"
 
 
-def test_needs_sync_true_when_release_group_match(tmp_path, stub_subliminal, mocker):
-    """release_group match sem hash → needs_sync=True (sync via referência EN)."""
+def test_needs_sync_false_when_release_group_match(tmp_path, stub_subliminal, mocker):
+    """release_group match sem hash → needs_sync=False (bem casado com o release)."""
     video_path = tmp_path / "Filme.mkv"
     video_path.write_bytes(b"\x00" * 10)
     stub_subliminal.get_matches.return_value = {"series", "season", "episode", "release_group"}
@@ -584,20 +584,18 @@ def test_needs_sync_true_when_release_group_match(tmp_path, stub_subliminal, moc
         language=Language("por", country="BR"),
         credentials=("u", "p"),
     )
-    assert info.needs_sync is True
+    assert info.needs_sync is False
     assert info.match_type == "release"
 
 
-def test_needs_sync_true_when_fallback_match(tmp_path, stub_subliminal, mocker):
-    """Só title match → needs_sync=True."""
-    video_path = tmp_path / "Filme.mkv"
+def test_needs_sync_true_when_fallback_low_similarity(tmp_path, stub_subliminal, mocker):
+    """Fallback com filename de baixa similaridade → needs_sync=True."""
+    video_path = tmp_path / "Filme.2024.1080p.BluRay.mkv"
     video_path.write_bytes(b"\x00" * 10)
     stub_subliminal.get_matches.return_value = {"title"}
+    stub_subliminal.filename = "OutroFilme.srt"  # baixa similaridade
 
-    mocker.patch(
-        "subs_down_n_sync.core.compute_score",
-        return_value=162,
-    )
+    mocker.patch("subs_down_n_sync.core.compute_score", return_value=162)
 
     _, info = find_and_download_subtitle(
         video_path,
@@ -605,6 +603,25 @@ def test_needs_sync_true_when_fallback_match(tmp_path, stub_subliminal, mocker):
         credentials=("u", "p"),
     )
     assert info.needs_sync is True
+    assert info.match_type == "fallback"
+
+
+def test_needs_sync_false_when_fallback_high_similarity(tmp_path, stub_subliminal, mocker):
+    """Fallback com filename de alta similaridade → needs_sync=False."""
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+    stub_subliminal.get_matches.return_value = {"title"}
+    # Match the full episode name for high similarity (>= 0.9)
+    stub_subliminal.filename = "Raising.Hope.S01E01.720p.HDTV.X264.pt-BR.srt"
+
+    mocker.patch("subs_down_n_sync.core.compute_score", return_value=162)
+
+    _, info = find_and_download_subtitle(
+        video_path,
+        language=Language("por", country="BR"),
+        credentials=("u", "p"),
+    )
+    assert info.needs_sync is False
     assert info.match_type == "fallback"
 
 
