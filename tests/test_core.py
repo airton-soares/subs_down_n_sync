@@ -607,11 +607,15 @@ def test_needs_sync_true_when_fallback_low_similarity(tmp_path, stub_subliminal,
 
 
 def test_needs_sync_false_when_fallback_high_similarity(tmp_path, stub_subliminal, mocker):
-    """Fallback com filename de alta similaridade → needs_sync=False."""
+    """Fallback com filename de alta similaridade → needs_sync=False.
+
+    A similarity é calculada contra video.name (objeto subliminal), não video_path.name.
+    O fixture stub_subliminal usa Episode("Raising.Hope.S01E01.720p.HDTV.X264", ...).
+    """
     video_path = tmp_path / "Filme.mkv"
     video_path.write_bytes(b"\x00" * 10)
     stub_subliminal.get_matches.return_value = {"title"}
-    # Match the full episode name for high similarity (>= 0.9)
+    # nome idêntico ao Episode.name do fixture → similaridade alta (>= 0.9)
     stub_subliminal.filename = "Raising.Hope.S01E01.720p.HDTV.X264.pt-BR.srt"
 
     mocker.patch("subs_down_n_sync.core.compute_score", return_value=162)

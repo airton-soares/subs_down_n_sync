@@ -193,12 +193,13 @@ def _pick_subtitle(
     pool = release_candidates if release_candidates else scored
     match_type = "release" if release_candidates else "fallback"
 
-    best_sub = max(
-        pool,
-        key=lambda x: _filename_similarity(getattr(x[0], "filename", "") or "", video_name),
-    )[0]
-    similarity = _filename_similarity(getattr(best_sub, "filename", "") or "", video_name)
-    needs_sync = _compute_needs_sync(match_type, similarity)
+    # calcula similarity uma vez por candidato e escolhe o melhor
+    pool_with_sim = [
+        (sub, score, _filename_similarity(getattr(sub, "filename", "") or "", video_name))
+        for sub, score in pool
+    ]
+    best_sub, _, best_similarity = max(pool_with_sim, key=lambda x: x[2])
+    needs_sync = _compute_needs_sync(match_type, best_similarity)
     return best_sub, match_type, needs_sync
 
 
