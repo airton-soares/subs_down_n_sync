@@ -131,15 +131,6 @@ def parse_language(raw: str) -> Language:
         ) from e
 
 
-def _classify_match(matches: set[str]) -> str:
-    if "hash" in matches:
-        return "hash"
-    if "release_group" in matches:
-        return "release"
-
-    return "fallback"
-
-
 def _filename_similarity(sub_filename: str, video_name: str) -> float:
     """Fração de tokens do stem do vídeo presentes no nome da legenda."""
     norm = re.compile(r"[\W_]+")
