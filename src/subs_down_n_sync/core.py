@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 import shutil
 import tempfile
@@ -30,10 +29,10 @@ from subs_down_n_sync._srt_utils import (
     _srt_to_segments,
     _ts,
 )
+from subs_down_n_sync.credentials import load_credentials
 from subs_down_n_sync.exceptions import (
     InvalidLanguageError,
     InvalidVideoError,
-    MissingCredentialsError,
     MissingDependencyError,
     SubtitleNotFoundError,
     SubtitleSyncError,
@@ -80,27 +79,6 @@ def check_ffmpeg() -> None:
             "ffmpeg não encontrado no PATH. Instale via gerenciador de pacotes "
             "(ex.: sudo apt install ffmpeg, brew install ffmpeg)."
         )
-
-
-def load_credentials() -> tuple[str, str]:
-    user = os.environ.get("OPENSUBTITLES_USERNAME")
-    pwd = os.environ.get("OPENSUBTITLES_PASSWORD")
-
-    missing = [
-        name
-        for name, val in (
-            ("OPENSUBTITLES_USERNAME", user),
-            ("OPENSUBTITLES_PASSWORD", pwd),
-        )
-        if not val
-    ]
-
-    if missing:
-        raise MissingCredentialsError(
-            "Variáveis de ambiente obrigatórias faltando: " + ", ".join(missing)
-        )
-
-    return user, pwd  # type: ignore[return-value]
 
 
 def validate_video_path(raw: str) -> Path:

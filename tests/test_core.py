@@ -19,16 +19,15 @@ from subs_down_n_sync.core import (
     finalize_output_path,
     find_and_download_subtitle,
     find_reference_subtitle,
-    load_credentials,
     parse_language,
     run,
     sync_subtitle,
     validate_video_path,
 )
+from subs_down_n_sync.credentials import load_credentials
 from subs_down_n_sync.exceptions import (
     InvalidLanguageError,
     InvalidVideoError,
-    MissingCredentialsError,
     MissingDependencyError,
     SubtitleNotFoundError,
     SubtitleSyncError,
@@ -88,20 +87,28 @@ def test_load_credentials_returns_tuple_when_both_set(monkeypatch):
     assert load_credentials() == ("joao", "senha123")
 
 
-def test_load_credentials_raises_when_username_missing(monkeypatch):
+def test_load_credentials_falls_back_to_prompt_when_username_missing(monkeypatch, mocker):
     monkeypatch.delenv("OPENSUBTITLES_USERNAME", raising=False)
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "x")
-    with pytest.raises(MissingCredentialsError, match="OPENSUBTITLES_USERNAME"):
-        load_credentials()
+    mocker.patch(
+        "subs_down_n_sync.credentials._prompt_and_save",
+        return_value=("promptuser", "promptpass"),
+    )
+    user, pwd = load_credentials()
+    assert user == "promptuser"
+    assert pwd == "promptpass"
 
 
-def test_load_credentials_raises_when_both_missing(monkeypatch):
+def test_load_credentials_falls_back_to_prompt_when_both_missing(monkeypatch, mocker):
     monkeypatch.delenv("OPENSUBTITLES_USERNAME", raising=False)
     monkeypatch.delenv("OPENSUBTITLES_PASSWORD", raising=False)
-    with pytest.raises(MissingCredentialsError) as exc:
-        load_credentials()
-    assert "OPENSUBTITLES_USERNAME" in str(exc.value)
-    assert "OPENSUBTITLES_PASSWORD" in str(exc.value)
+    mocker.patch(
+        "subs_down_n_sync.credentials._prompt_and_save",
+        return_value=("promptuser", "promptpass"),
+    )
+    user, pwd = load_credentials()
+    assert user == "promptuser"
+    assert pwd == "promptpass"
 
 
 def test_parse_language_pt_br_returns_portuguese_brazil():
