@@ -1677,7 +1677,12 @@ def test_main_dispatches_to_run_directory_when_path_is_dir(tmp_path, mocker):
     code = main([str(tmp_path)])
 
     mock_run_dir.assert_called_once_with(
-        tmp_path, lang_tag="pt-BR", overwrite=False, resync=False, parallel=False
+        tmp_path,
+        lang_tag="pt-BR",
+        overwrite=False,
+        resync=False,
+        parallel=False,
+        whisper_model="tiny",
     )
     assert code == 0
 
@@ -1822,7 +1827,12 @@ def test_main_passes_overwrite_flag_to_run_directory(tmp_path, mocker):
     main([str(tmp_path), "--overwrite"])
 
     mock_run_dir.assert_called_once_with(
-        tmp_path, lang_tag="pt-BR", overwrite=True, resync=False, parallel=False
+        tmp_path,
+        lang_tag="pt-BR",
+        overwrite=True,
+        resync=False,
+        parallel=False,
+        whisper_model="tiny",
     )
 
 
@@ -1864,7 +1874,12 @@ def test_main_passes_parallel_flag_to_run_directory(tmp_path, mocker):
     main([str(tmp_path), "--parallel"])
 
     mock_run_dir.assert_called_once_with(
-        tmp_path, lang_tag="pt-BR", overwrite=False, resync=False, parallel=True
+        tmp_path,
+        lang_tag="pt-BR",
+        overwrite=False,
+        resync=False,
+        parallel=True,
+        whisper_model="tiny",
     )
 
 
@@ -1984,7 +1999,12 @@ def test_main_passes_resync_flag_to_run_directory(tmp_path, mocker):
     main([str(tmp_path), "--resync"])
 
     mock_run_dir.assert_called_once_with(
-        tmp_path, lang_tag="pt-BR", overwrite=False, resync=True, parallel=False
+        tmp_path,
+        lang_tag="pt-BR",
+        overwrite=False,
+        resync=True,
+        parallel=False,
+        whisper_model="tiny",
     )
 
 
