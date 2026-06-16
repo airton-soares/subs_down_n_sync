@@ -29,7 +29,7 @@ from subs_down_n_sync.exceptions import (
 from subs_down_n_sync.matcher import (
     SCORE_THRESHOLD,
     SubtitleInfo,
-    _filename_similarity,
+    filename_similarity,
     pick_subtitle,
 )
 
@@ -216,7 +216,7 @@ def run(
 
     if resync and srt_existing.exists():
         srt_path = srt_existing
-        similarity = _filename_similarity(srt_existing.name, video_path.name)
+        similarity = filename_similarity(srt_existing.name, video_path.name)
         needs_sync = similarity < SCORE_THRESHOLD
         info = SubtitleInfo(
             provider="local",
