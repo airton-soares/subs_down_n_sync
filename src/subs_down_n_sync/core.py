@@ -11,7 +11,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-import charset_normalizer
 import numpy as np
 import subliminal
 from babelfish import Language
@@ -20,6 +19,17 @@ from sentence_transformers import SentenceTransformer
 from subliminal.refiners.hash import refine as hash_refine
 from subliminal.score import compute_score
 
+from subs_down_n_sync._srt_utils import (
+    _SRT_BLOCK_RE,
+    _TS_RE,
+    _cues_to_srt,
+    _mean_offset_seconds,
+    _parse_srt_timestamps,
+    _read_text_detected,
+    _seconds_to_ts,
+    _srt_to_segments,
+    _ts,
+)
 from subs_down_n_sync.exceptions import (
     InvalidLanguageError,
     InvalidVideoError,
@@ -36,19 +46,6 @@ DEFAULT_LANG = "pt-BR"
 SCORE_THRESHOLD = 0.9  # score/max_score >= 90% → sem sync
 
 SYNC_THRESHOLD_SECONDS = 0.2
-
-_TS_RE = re.compile(
-    r"^(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}",
-    re.MULTILINE,
-)
-
-_SRT_BLOCK_RE = re.compile(
-    r"(\d+)\n"
-    r"(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})\n"
-    r"((?:.+\n?)+)",
-    re.MULTILINE,
-)
-
 
 @dataclass(frozen=True)
 class SubtitleInfo:
@@ -278,55 +275,6 @@ def find_reference_subtitle(
     return ref_path
 
 
-def _ts(h: str, m: str, s: str, ms: str) -> float:
-    return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
-
-
-def _seconds_to_ts(total: float) -> str:
-    total = max(0.0, total)
-    h = int(total // 3600)
-    m = int((total % 3600) // 60)
-    s = int(total % 60)
-    ms = round((total - int(total)) * 1000)
-    if ms == 1000:
-        ms = 0
-        s += 1
-    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
-
-
-def _srt_to_segments(srt_text: str) -> list[dict]:
-    segments = []
-    for m in _SRT_BLOCK_RE.finditer(srt_text):
-        segments.append(
-            {
-                "start": _ts(m.group(2), m.group(3), m.group(4), m.group(5)),
-                "end": _ts(m.group(6), m.group(7), m.group(8), m.group(9)),
-                "text": m.group(10).strip(),
-            }
-        )
-    return segments
-
-
-def _parse_srt_timestamps(srt_text: str) -> list[float]:
-    out: list[float] = []
-
-    for h, m, s, ms in _TS_RE.findall(srt_text):
-        out.append(int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000)
-
-    return out
-
-
-def _mean_offset_seconds(orig: list[float], synced: list[float]) -> float:
-    n = min(len(orig), len(synced))
-
-    if n == 0:
-        return 0.0
-
-    total = sum(abs(synced[i] - orig[i]) for i in range(n))
-
-    return total / n
-
-
 _SEMANTIC_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 
 
@@ -418,22 +366,6 @@ def _align_cues_by_semantics(
             result[i]["end"] = max(max_end, result[i]["start"] + 0.1)
 
     return result
-
-
-def _cues_to_srt(cues: list[dict]) -> str:
-    lines = []
-    for i, cue in enumerate(cues, start=1):
-        lines.append(
-            f"{i}\n{_seconds_to_ts(cue['start'])} --> {_seconds_to_ts(cue['end'])}\n{cue['text']}\n"
-        )
-    return "\n".join(lines)
-
-
-def _read_text_detected(path: Path) -> str:
-    raw = path.read_bytes()
-    result = charset_normalizer.from_bytes(raw).best()
-    encoding = str(result.encoding) if result else "utf-8"
-    return raw.decode(encoding, errors="replace")
 
 
 def sync_subtitle(
