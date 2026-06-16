@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.3.2 (2026-06-16)
+
+### Bug Fixes
+
+- Usar Any em pick_subtitle para suprimir erros Pylance
+  ([`04ed336`](https://github.com/airton-soares/subs_down_n_sync/commit/04ed3367fc11900a3f223a2e0aa371917b55c3dd))
+
+
 ## v1.3.1 (2026-06-16)
 
 ### Bug Fixes
