@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from subliminal.score import compute_score
 
@@ -42,9 +43,9 @@ def filename_similarity(sub_filename: str, video_name: str) -> float:
 
 
 def pick_subtitle(
-    candidates: list,
-    video: object,
-) -> tuple[object, SubtitleInfo]:
+    candidates: list[Any],
+    video: Any,
+) -> tuple[Any, SubtitleInfo]:
     video_name = getattr(video, "name", "") or ""
 
     scored = [(sub, compute_score(sub, video)) for sub in candidates]
