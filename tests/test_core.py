@@ -1186,7 +1186,7 @@ def test_align_cues_by_semantics_simple_1to1(mocker):
     mock_model.encode.side_effect = lambda texts, **kw: np.array(
         [fake_embeddings[t] for t in texts]
     )
-    mocker.patch("subs_down_n_sync.core.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -1218,7 +1218,7 @@ def test_align_cues_by_semantics_preserves_target_duration(mocker):
     mock_model.encode.side_effect = lambda texts, **kw: np.array(
         [fake_embeddings[t] for t in texts]
     )
-    mocker.patch("subs_down_n_sync.core.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -1246,7 +1246,7 @@ def test_align_cues_by_semantics_enforces_min_reading_duration(mocker):
     mock_model.encode.side_effect = lambda texts, **kw: np.array(
         [fake_embeddings[t] for t in texts]
     )
-    mocker.patch("subs_down_n_sync.core.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -1274,7 +1274,7 @@ def test_align_cues_by_semantics_clamps_end_to_next_start(mocker):
 
     mock_model = mocker.MagicMock()
     mock_model.encode.side_effect = fake_encode
-    mocker.patch("subs_down_n_sync.core.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -1302,7 +1302,7 @@ def test_align_cues_by_semantics_preserves_order(mocker):
 
     mock_model = mocker.MagicMock()
     mock_model.encode.side_effect = fake_encode
-    mocker.patch("subs_down_n_sync.core.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -1331,7 +1331,7 @@ def test_align_cues_uses_original_timestamps_when_no_dtw_mapping(mocker):
 
     mock_model = mocker.MagicMock()
     mock_model.encode.side_effect = fake_encode
-    mocker.patch("subs_down_n_sync.core.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -1367,7 +1367,7 @@ def test_align_cues_enforces_monotonicity_when_dtw_maps_multiple_targets_to_same
 
     mock_model = mocker.MagicMock()
     mock_model.encode.side_effect = fake_encode
-    mocker.patch("subs_down_n_sync.core.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -1391,7 +1391,7 @@ def test_sync_subtitle_uses_semantic_alignment(tmp_path, mocker):
         {"start": 3.0, "end": 5.0, "text": "olá mundo"},
         {"start": 11.0, "end": 13.0, "text": "bom dia"},
     ]
-    mocker.patch("subs_down_n_sync.core._align_cues_by_semantics", return_value=aligned_cues)
+    mocker.patch("subs_down_n_sync.audio_sync._align_cues_by_semantics", return_value=aligned_cues)
 
     result = sync_subtitle(srt, ref_path=ref)
 
@@ -1411,7 +1411,7 @@ def test_sync_subtitle_raises_when_alignment_fails(tmp_path, mocker):
     original_text = srt.read_text()
 
     mocker.patch(
-        "subs_down_n_sync.core._align_cues_by_semantics",
+        "subs_down_n_sync.audio_sync._align_cues_by_semantics",
         side_effect=RuntimeError("modelo falhou"),
     )
 
@@ -1429,7 +1429,7 @@ def test_sync_subtitle_returns_not_synced_when_offset_below_threshold(tmp_path, 
     ref.write_text("1\n00:00:01,000 --> 00:00:02,000\nline 1\n")
 
     aligned_cues = [{"start": 1.05, "end": 2.05, "text": "linha 1"}]
-    mocker.patch("subs_down_n_sync.core._align_cues_by_semantics", return_value=aligned_cues)
+    mocker.patch("subs_down_n_sync.audio_sync._align_cues_by_semantics", return_value=aligned_cues)
 
     result = sync_subtitle(srt, ref_path=ref)
 
@@ -1456,7 +1456,7 @@ def test_sync_subtitle_reads_latin1_encoded_file(tmp_path, mocker):
         {"start": 3.0, "end": 5.0, "text": "ação dramática"},
         {"start": 11.0, "end": 13.0, "text": "coração"},
     ]
-    mocker.patch("subs_down_n_sync.core._align_cues_by_semantics", return_value=aligned_cues)
+    mocker.patch("subs_down_n_sync.audio_sync._align_cues_by_semantics", return_value=aligned_cues)
 
     result = sync_subtitle(srt, ref_path=ref)
 
