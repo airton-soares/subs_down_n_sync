@@ -31,12 +31,17 @@ _STEP_LABELS: dict[str, str] = {
     "buscando": "Buscando legenda no OpenSubtitles...",
     "baixado": "Legenda encontrada e baixada",
     "referencia": "Baixando legenda EN de referência...",
-    "sem_referencia": "Referência EN não encontrada — sincronização ignorada",
-    "sincronizando": "Alinhando com embeddings semânticos...",
+    "sem_referencia": "Referência EN não disponível — tentando audio sync...",
+    "sincronizando": "Sincronizando via embeddings semânticos...",
     "sincronizado": "Sincronização concluída",
     "sem_sync": "Legenda já sincronizada",
     "erro_sync": "Erro na sincronização",
     "usando_existente": "Usando legenda existente...",
+    "tier4_audio": "! Baixa confiança de match — ativando sync por áudio",
+    "transcrevendo": "Transcrevendo áudio com Whisper...",
+    "alinhando": "Alinhando legenda ao áudio...",
+    "offset_linear": "Offset linear detectado e aplicado",
+    "audio_dtw": "DTW aplicado (drift não-linear detectado)",
     "concluido": "Finalizado",
 }
 
@@ -87,10 +92,15 @@ def _print_summary(summary: RunSummary) -> None:
         )
         border = "cyan"
 
+    fields_str = ", ".join(summary.matched_fields) if summary.matched_fields else "-"
+    if summary.match_tier:
+        tier_line = f"Match: tier{summary.match_tier} ({fields_str})"
+    else:
+        tier_line = f"Match: {summary.match_type}"
+
     body = (
         f"Idioma: [bold]{summary.lang_tag}[/bold]  |  "
-        f"Provider: {summary.provider}  |  "
-        f"Match: {summary.match_type}\n"
+        f"Provider: {summary.provider}  |  {tier_line}\n"
         f"{status_line}\n"
         f"Tempo total: {summary.elapsed_seconds:.2f}s"
     )
@@ -116,6 +126,8 @@ def _process_video(
     lang_tag: str,
     progress: Progress,
     resync: bool = False,
+    overwrite: bool = False,
+    whisper_model: str = "tiny",
 ) -> RunSummary:
     task_id = progress.add_task(video.name, detail="aguardando...", total=None)
 
@@ -124,7 +136,14 @@ def _process_video(
         progress.update(task_id, description=f"{video.name} — {label}", detail=detail)
 
     try:
-        return run(str(video), lang_tag=lang_tag, on_progress=on_progress, resync=resync)
+        return run(
+            str(video),
+            lang_tag=lang_tag,
+            on_progress=on_progress,
+            resync=resync,
+            overwrite=overwrite,
+            whisper_model=whisper_model,
+        )
     finally:
         progress.remove_task(task_id)
 
@@ -135,6 +154,7 @@ def _run_directory(
     overwrite: bool = False,
     resync: bool = False,
     parallel: bool = False,
+    whisper_model: str = "tiny",
 ) -> tuple[list[RunSummary], list[Path], list[tuple[Path, str]]]:
     videos = sorted(p for p in dir_path.rglob("*") if p.suffix.lower() in VIDEO_EXTENSIONS)
 
@@ -165,7 +185,15 @@ def _run_directory(
             with ThreadPoolExecutor(max_workers=MAX_PARALLEL_WORKERS) as pool:
                 effective_resync = False if overwrite else resync
                 futures = {
-                    pool.submit(_process_video, v, lang_tag, progress, effective_resync): v
+                    pool.submit(
+                        _process_video,
+                        v,
+                        lang_tag,
+                        progress,
+                        effective_resync,
+                        overwrite,
+                        whisper_model,
+                    ): v
                     for v in to_process
                 }
                 for fut in as_completed(futures):
@@ -179,7 +207,16 @@ def _run_directory(
             effective_resync = False if overwrite else resync
             for video in to_process:
                 try:
-                    results.append(_process_video(video, lang_tag, progress, effective_resync))
+                    results.append(
+                        _process_video(
+                            video,
+                            lang_tag,
+                            progress,
+                            effective_resync,
+                            overwrite,
+                            whisper_model,
+                        )
+                    )
                 except SubsDownError as e:
                     errors.append((video, str(e)))
                 progress.advance(overall)
@@ -281,6 +318,12 @@ def build_parser() -> argparse.ArgumentParser:
             "quando o caminho for um diretório."
         ),
     )
+    parser.add_argument(
+        "--whisper-model",
+        default="tiny",
+        choices=["tiny", "base", "small", "medium", "large"],
+        help="Modelo Whisper para audio sync (padrão: tiny)",
+    )
     return parser
 
 
@@ -290,6 +333,8 @@ def main(argv: list[str] | None = None) -> int:
 
     p = Path(args.path).expanduser()
 
+    whisper_model = args.whisper_model
+
     if p.is_dir():
         results, skipped, errors = _run_directory(
             p,
@@ -297,6 +342,7 @@ def main(argv: list[str] | None = None) -> int:
             overwrite=args.overwrite,
             resync=args.resync,
             parallel=args.parallel,
+            whisper_model=whisper_model,
         )
         _print_batch_summary(results, skipped, errors)
         return 1 if errors else 0
@@ -333,6 +379,7 @@ def main(argv: list[str] | None = None) -> int:
                 on_progress=on_progress,
                 resync=args.resync,
                 overwrite=args.overwrite,
+                whisper_model=whisper_model,
             )
         except SubsDownError as e:
             progress.stop()

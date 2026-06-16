@@ -54,6 +54,11 @@ export OPENSUBTITLES_USERNAME="your_username"
 export OPENSUBTITLES_PASSWORD="your_password"
 ```
 
+`OPENSUBTITLES_USERNAME` and `OPENSUBTITLES_PASSWORD` are optional if credentials
+are already saved in `~/.config/subs-down-n-sync/credentials.enc` (encrypted with AES-128).
+On first use without env vars, the CLI prompts interactively and saves the file.
+Env vars take priority over the saved file.
+
 > For development setup, see [Setup](#setup).
 
 ## Setup
@@ -120,6 +125,11 @@ setx OPENSUBTITLES_USERNAME "your_username"
 setx OPENSUBTITLES_PASSWORD "your_password"
 ```
 
+`OPENSUBTITLES_USERNAME` and `OPENSUBTITLES_PASSWORD` are optional if credentials
+are already saved in `~/.config/subs-down-n-sync/credentials.enc` (encrypted with AES-128).
+On first use without env vars, the CLI prompts interactively and saves the file.
+Env vars take priority over the saved file.
+
 ## Usage
 
 ```bash
@@ -136,6 +146,9 @@ subs-down-n-sync /path/to/folder/ --lang en
 subs-down-n-sync /path/to/folder/ --overwrite   # overwrite existing subtitles (re-download from API)
 subs-down-n-sync /path/to/folder/ --resync      # sync existing subtitle without hitting the API
 subs-down-n-sync /path/to/folder/ --parallel    # process up to 2 videos in parallel
+
+# Audio sync with a larger Whisper model (more accurate, slower)
+subs-down-n-sync /path/to/movie.mkv --whisper-model base
 
 # Or via Python module
 python -m subs_down_n_sync /path/to/movie.mkv

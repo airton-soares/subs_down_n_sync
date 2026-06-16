@@ -54,6 +54,11 @@ export OPENSUBTITLES_USERNAME="seu_usuario"
 export OPENSUBTITLES_PASSWORD="sua_senha"
 ```
 
+`OPENSUBTITLES_USERNAME` e `OPENSUBTITLES_PASSWORD` são opcionais se as credenciais
+já estiverem salvas em `~/.config/subs-down-n-sync/credentials.enc` (criptografado com AES-128).
+No primeiro uso sem env vars, o CLI solicita interativamente e salva o arquivo.
+Env vars têm prioridade sobre o arquivo salvo.
+
 > Para desenvolvimento, veja [Setup](#setup).
 
 ## Setup
@@ -120,6 +125,11 @@ setx OPENSUBTITLES_USERNAME "seu_usuario"
 setx OPENSUBTITLES_PASSWORD "sua_senha"
 ```
 
+`OPENSUBTITLES_USERNAME` e `OPENSUBTITLES_PASSWORD` são opcionais se as credenciais
+já estiverem salvas em `~/.config/subs-down-n-sync/credentials.enc` (criptografado com AES-128).
+No primeiro uso sem env vars, o CLI solicita interativamente e salva o arquivo.
+Env vars têm prioridade sobre o arquivo salvo.
+
 ## Uso
 
 ```bash
@@ -136,6 +146,9 @@ subs-down-n-sync /caminho/para/pasta/ --lang en
 subs-down-n-sync /caminho/para/pasta/ --overwrite   # sobrescreve legendas existentes (baixa da API)
 subs-down-n-sync /caminho/para/pasta/ --resync      # sincroniza legenda existente sem API
 subs-down-n-sync /caminho/para/pasta/ --parallel    # processa até 2 vídeos simultâneos
+
+# Audio sync com modelo Whisper maior (mais preciso, mais lento)
+subs-down-n-sync /caminho/para/filme.mkv --whisper-model base
 
 # Ou via módulo Python
 python -m subs_down_n_sync /caminho/para/filme.mkv

@@ -30,6 +30,8 @@ dependencies = [
     "setuptools<81",
     "rich>=13",
     "charset-normalizer>=3.0",
+    "cryptography>=42",
+    "faster-whisper>=1.0",
 ]
 
 [project.scripts]
