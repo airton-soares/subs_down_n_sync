@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.3.1 (2026-06-16)
+
+### Bug Fixes
+
+- Tornar filename_similarity pública
+  ([`6f264e8`](https://github.com/airton-soares/subs_down_n_sync/commit/6f264e8ac5b4914a3a8153d4dd9c38bf0cbb818e))
+
+### Chores
+
+- Configurar Pylance para suprimir falsos positivos de libs sem stubs
+  ([`ae06648`](https://github.com/airton-soares/subs_down_n_sync/commit/ae06648ed7df4127fc4ac131fb05717f48b18699))
+
+- Corrigir formatação ruff em test_core.py
+  ([`4116f63`](https://github.com/airton-soares/subs_down_n_sync/commit/4116f63554ad1f1e4d1f404a88a71bc972a01caa))
+
+- Mover .vscode/ para .gitignore e remover do rastreamento
+  ([`279fff9`](https://github.com/airton-soares/subs_down_n_sync/commit/279fff99d76dd1307e5aa783337efd19d5f76b08))
+
+
 ## v1.3.0 (2026-06-16)
 
 ### Chores
