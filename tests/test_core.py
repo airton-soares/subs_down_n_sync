@@ -469,6 +469,10 @@ def test_run_keeps_subtitle_when_sync_fails(tmp_path, monkeypatch, mocker):
         "subs_down_n_sync.core.sync_subtitle",
         side_effect=SubtitleSyncError("boom"),
     )
+    mocker.patch(
+        "subs_down_n_sync.core.sync_by_audio",
+        side_effect=SubtitleSyncError("boom"),
+    )
 
     summary = run(str(video), lang_tag="en")
 
@@ -833,6 +837,10 @@ def test_run_skips_sync_when_no_reference_available(tmp_path, monkeypatch, mocke
     mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
     mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=None)
     mock_sync = mocker.patch("subs_down_n_sync.core.sync_subtitle")
+    mocker.patch(
+        "subs_down_n_sync.core.sync_by_audio",
+        side_effect=SubtitleSyncError("audio sync indisponível"),
+    )
 
     summary = run(str(video), lang_tag="pt-BR")
 
@@ -2055,3 +2063,98 @@ def test_run_resync_with_low_similarity_calls_sync(tmp_path, monkeypatch, mocker
 
     mock_sync.assert_called_once()
     assert summary.match_type == "existing"
+
+
+def test_run_uses_audio_sync_when_tier4(tmp_path, monkeypatch, mocker):
+    """match_tier=4 → sync_by_audio chamado (não tenta ref EN)."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "u")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "p")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    downloaded = tmp_path / "Filme.pt-BR.srt"
+
+    def fake_find(video_path, language, credentials):
+        downloaded.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+        from subs_down_n_sync.matcher import SubtitleInfo
+        return downloaded, SubtitleInfo(
+            provider="opensubtitles", match_type="audio",
+            needs_sync=True, match_tier=4, matched_fields=[],
+        )
+
+    mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
+    mock_ref = mocker.patch("subs_down_n_sync.core.find_reference_subtitle")
+    from subs_down_n_sync.audio_sync import SyncResult
+    mock_audio = mocker.patch(
+        "subs_down_n_sync.core.sync_by_audio",
+        return_value=SyncResult(synced=True, offset_seconds=2.0, sync_mode="audio_linear"),
+    )
+
+    from subs_down_n_sync.core import run
+    summary = run(str(video), lang_tag="pt-BR")
+
+    mock_audio.assert_called_once()
+    mock_ref.assert_not_called()
+    assert summary.sync_mode == "audio_linear"
+    assert summary.match_tier == 4
+
+
+def test_run_falls_back_to_audio_when_no_ref(tmp_path, monkeypatch, mocker):
+    """needs_sync=True + ref EN ausente → sync_by_audio chamado."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "u")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "p")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    downloaded = tmp_path / "Filme.pt-BR.srt"
+
+    def fake_find(video_path, language, credentials):
+        downloaded.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+        from subs_down_n_sync.matcher import SubtitleInfo
+        return downloaded, SubtitleInfo(
+            provider="opensubtitles", match_type="fallback",
+            needs_sync=True, match_tier=3, matched_fields=[],
+        )
+
+    mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
+    mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=None)
+    from subs_down_n_sync.audio_sync import SyncResult
+    mock_audio = mocker.patch(
+        "subs_down_n_sync.core.sync_by_audio",
+        return_value=SyncResult(synced=True, offset_seconds=1.5, sync_mode="audio_linear"),
+    )
+
+    from subs_down_n_sync.core import run
+    summary = run(str(video), lang_tag="pt-BR")
+
+    mock_audio.assert_called_once()
+    assert summary.synced is True
+
+
+def test_run_runsummary_includes_match_tier(tmp_path, monkeypatch, mocker):
+    """RunSummary inclui match_tier e matched_fields."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "u")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "p")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+    downloaded = tmp_path / "Filme.pt-BR.srt"
+
+    def fake_find(video_path, language, credentials):
+        downloaded.write_text("1\n00:00:01,000 --> 00:00:02,000\noi\n")
+        from subs_down_n_sync.matcher import SubtitleInfo
+        return downloaded, SubtitleInfo(
+            provider="opensubtitles", match_type="hash",
+            needs_sync=False, match_tier=1, matched_fields=["hash"],
+        )
+
+    mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
+
+    from subs_down_n_sync.core import run
+    summary = run(str(video), lang_tag="pt-BR")
+
+    assert summary.match_tier == 1
+    assert summary.matched_fields == ["hash"]

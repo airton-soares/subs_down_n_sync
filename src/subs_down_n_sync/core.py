@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import subliminal
@@ -25,6 +25,7 @@ from subs_down_n_sync.audio_sync import (
     ProgressCallback,
     SyncResult,
     _align_cues_by_semantics,
+    sync_by_audio,
     sync_subtitle,
 )
 from subs_down_n_sync.credentials import load_credentials
@@ -59,6 +60,8 @@ class RunSummary:
     sync_error: str | None
     elapsed_seconds: float
     lang_tag: str
+    match_tier: int = 0
+    matched_fields: list[str] = field(default_factory=list)
 
 
 def check_ffmpeg() -> None:
@@ -189,6 +192,7 @@ def run(
     on_progress: ProgressCallback | None = None,
     resync: bool = False,
     overwrite: bool = False,
+    whisper_model: str = "tiny",
 ) -> RunSummary:
     def _notify(step: str, detail: str = "") -> None:
         if on_progress:
@@ -217,6 +221,8 @@ def run(
             sync_error=None,
             elapsed_seconds=elapsed,
             lang_tag=lang_tag,
+            match_tier=0,
+            matched_fields=[],
         )
 
     if resync and srt_existing.exists():
@@ -241,22 +247,51 @@ def run(
     sync_error: str | None = None
 
     if info.needs_sync:
-        _notify("referencia", "buscando EN")
-        ref_path = find_reference_subtitle(video_path, credentials=credentials)
-
-        if ref_path is None:
-            sync_error = "legenda EN de referência não encontrada — sincronização ignorada"
-            sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
-            _notify("sem_referencia", "")
-        else:
-            _notify("sincronizando", "embeddings semânticos")
+        if info.match_tier == 4:
+            _notify("tier4_audio", info.match_type)
             try:
-                sync_result = sync_subtitle(srt_path, ref_path=ref_path)
-                _notify("sincronizado", f"offset={sync_result.offset_seconds:.2f}s")
+                sync_result = sync_by_audio(
+                    srt_path,
+                    video_path,
+                    model_size=whisper_model,
+                    on_progress=on_progress,
+                )
+                _notify("sincronizado", f"modo={sync_result.sync_mode} offset={sync_result.offset_seconds:.2f}s")
             except SubtitleSyncError as e:
                 sync_error = str(e)
                 sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
                 _notify("erro_sync", str(e))
+        else:
+            _notify("referencia", "buscando EN")
+            ref_path = find_reference_subtitle(video_path, credentials=credentials)
+
+            if ref_path:
+                _notify("sincronizando", "embeddings semânticos")
+                try:
+                    sync_result = sync_subtitle(srt_path, ref_path=ref_path)
+                    _notify("sincronizado", f"offset={sync_result.offset_seconds:.2f}s")
+                except SubtitleSyncError:
+                    _notify("sem_referencia", "ref falhou — tentando audio sync")
+                    try:
+                        sync_result = sync_by_audio(
+                            srt_path, video_path, model_size=whisper_model, on_progress=on_progress
+                        )
+                        _notify("sincronizado", f"modo={sync_result.sync_mode}")
+                    except SubtitleSyncError as e2:
+                        sync_error = str(e2)
+                        sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
+                        _notify("erro_sync", str(e2))
+            else:
+                _notify("sem_referencia", "tentando audio sync")
+                try:
+                    sync_result = sync_by_audio(
+                        srt_path, video_path, model_size=whisper_model, on_progress=on_progress
+                    )
+                    _notify("sincronizado", f"modo={sync_result.sync_mode}")
+                except SubtitleSyncError as e:
+                    sync_error = str(e)
+                    sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
+                    _notify("erro_sync", str(e))
     else:
         sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
         _notify("sem_sync", f"offset={sync_result.offset_seconds:.2f}s")
@@ -276,4 +311,6 @@ def run(
         sync_error=sync_error,
         elapsed_seconds=elapsed,
         lang_tag=lang_tag,
+        match_tier=info.match_tier,
+        matched_fields=list(info.matched_fields),
     )
