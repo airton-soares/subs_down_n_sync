@@ -2,6 +2,49 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-06-16)
+
+### Chores
+
+- Adicionar dependências cryptography e faster-whisper
+  ([`6fdc184`](https://github.com/airton-soares/subs_down_n_sync/commit/6fdc18448354b3ecf50d310e6eb3419b77abe090))
+
+- Corrigir erros de lint da pipeline
+  ([`e6bf2c2`](https://github.com/airton-soares/subs_down_n_sync/commit/e6bf2c26f01ebb7acddb9a8183071058f9b73a0b))
+
+### Documentation
+
+- Atualizar documentação com nova arquitetura, credenciais e --whisper-model
+  ([`5c9f566`](https://github.com/airton-soares/subs_down_n_sync/commit/5c9f5669226b3bc5d69acf9038f6adee3c854da9))
+
+### Features
+
+- Adicionar audio_sync.py com sync por referência e por áudio (faster-whisper)
+  ([`1f61632`](https://github.com/airton-soares/subs_down_n_sync/commit/1f6163282fd748e97dbb8929d0a160d0908a4195))
+
+- Adicionar credentials.py com armazenamento Fernet criptografado
+  ([`c096397`](https://github.com/airton-soares/subs_down_n_sync/commit/c0963979781ef4fbadfabdd0dab991f2f7e3e701))
+
+- Adicionar matcher.py com hierarquia de match em 4 tiers
+  ([`c966c9d`](https://github.com/airton-soares/subs_down_n_sync/commit/c966c9db0bb1c9f34d00f741b6770e809263a9ee))
+
+- Atualizar cli.py com novos steps de progresso e flag --whisper-model
+  ([`916f2cb`](https://github.com/airton-soares/subs_down_n_sync/commit/916f2cb918d8dace636de3498df139a5dbe44a51))
+
+- Atualizar run() com audio sync como fallback e parâmetro whisper_model
+  ([`e014a0c`](https://github.com/airton-soares/subs_down_n_sync/commit/e014a0c12b9b29f778fa88c1dff6fd21428f9255))
+
+### Refactoring
+
+- Extrair utilitários SRT para _srt_utils.py
+  ([`6efdeff`](https://github.com/airton-soares/subs_down_n_sync/commit/6efdeffca39edb1f0fddb116b92cc9f9c723186b))
+
+### Testing
+
+- Atualizar test_core.py para propagar whisper_model nos mocks de cli
+  ([`c21e50d`](https://github.com/airton-soares/subs_down_n_sync/commit/c21e50d12bd517799b2c656e203feb05f2725ed1))
+
+
 ## v1.2.0 (2026-04-27)
 
 ### Bug Fixes
