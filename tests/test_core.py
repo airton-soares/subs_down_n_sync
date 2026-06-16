@@ -29,7 +29,7 @@ from subs_down_n_sync.exceptions import (
     SubtitleNotFoundError,
     SubtitleSyncError,
 )
-from subs_down_n_sync.matcher import SubtitleInfo, _compute_needs_sync, _filename_similarity
+from subs_down_n_sync.matcher import SubtitleInfo, _compute_needs_sync, filename_similarity
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mini.srt"
 
@@ -604,11 +604,11 @@ def test_main_expected_error_returns_1(tmp_path, capsys):
     assert "não existe" in captured.err
 
 
-# --- testes para _filename_similarity ---
+# --- testes para filename_similarity ---
 
 
 def test_filename_similarity_exact_match():
-    score = _filename_similarity(
+    score = filename_similarity(
         "Raising.Hope.S01E03.720p.HDTV.X264-MRSK.srt",
         "Raising.Hope.S01E03.720p.HDTV.X264-MRSK.mkv",
     )
@@ -616,7 +616,7 @@ def test_filename_similarity_exact_match():
 
 
 def test_filename_similarity_partial_match():
-    score = _filename_similarity(
+    score = filename_similarity(
         "Raising.Hope.S01E03.720p.WEB-DL.DD5.1.H.264-NT.srt",
         "Raising.Hope.S01E03.720p.HDTV.X264-MRSK.mkv",
     )
@@ -624,23 +624,23 @@ def test_filename_similarity_partial_match():
 
 
 def test_filename_similarity_no_match():
-    assert _filename_similarity(
+    assert filename_similarity(
         "totally.different.srt", "Raising.Hope.S01E03.mkv"
     ) == pytest.approx(0.0)
 
 
 def test_filename_similarity_empty_video_stem():
     """Vídeo cujo stem vira tokens vazios após normalização → retorna 0.0."""
-    assert _filename_similarity("Filme.srt", "_.mkv") == pytest.approx(0.0)
+    assert filename_similarity("Filme.srt", "_.mkv") == pytest.approx(0.0)
 
 
 def test_filename_similarity_prefers_closer_release(stub_subliminal):
     """Legenda com tokens mais próximos do vídeo deve ter maior similaridade."""
-    score_close = _filename_similarity(
+    score_close = filename_similarity(
         "Raising.Hope.S01E03.720p.HDTV.X264-MRSK.srt",
         "Raising.Hope.S01E03.720p.HDTV.X264-MRSK.mkv",
     )
-    score_far = _filename_similarity(
+    score_far = filename_similarity(
         "Raising.Hope.S01E03.720p.WEB-DL.NT.srt",
         "Raising.Hope.S01E03.720p.HDTV.X264-MRSK.mkv",
     )
@@ -2146,7 +2146,7 @@ def test_run_resync_with_low_similarity_calls_sync(tmp_path, monkeypatch, mocker
         return_value=SyncResult(synced=True, offset_seconds=0.5),
     )
 
-    mocker.patch("subs_down_n_sync.core._filename_similarity", return_value=0.3)
+    mocker.patch("subs_down_n_sync.core.filename_similarity", return_value=0.3)
 
     summary = run(str(video), lang_tag="pt-BR", resync=True)
 
