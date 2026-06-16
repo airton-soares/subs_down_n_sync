@@ -624,9 +624,9 @@ def test_filename_similarity_partial_match():
 
 
 def test_filename_similarity_no_match():
-    assert filename_similarity(
-        "totally.different.srt", "Raising.Hope.S01E03.mkv"
-    ) == pytest.approx(0.0)
+    assert filename_similarity("totally.different.srt", "Raising.Hope.S01E03.mkv") == pytest.approx(
+        0.0
+    )
 
 
 def test_filename_similarity_empty_video_stem():
