@@ -11,14 +11,21 @@ subs_down_n_sync/
 │       ├── __init__.py          # exports __version__ and run
 │       ├── __main__.py          # enables python -m subs_down_n_sync
 │       ├── cli.py               # argparse + entry point main()
-│       ├── core.py              # all business logic
+│       ├── core.py              # orchestration: run(), find_and_download_subtitle()
+│       ├── credentials.py       # encrypted credentials (Fernet + machine-id)
+│       ├── matcher.py           # pick_subtitle(), SubtitleInfo, 4 match tiers
+│       ├── audio_sync.py        # SyncResult, sync_subtitle() (ref), sync_by_audio() (whisper)
+│       ├── _srt_utils.py        # SRT parsing/formatting (internal module)
 │       └── exceptions.py        # all project exceptions
 ├── tests/
 │   ├── __init__.py
 │   ├── fixtures/
 │   │   └── mini.srt
-│   ├── test_core.py             # unit tests
-│   └── test_integration.py      # integration tests (marker: integration)
+│   ├── test_audio_sync.py       # tests for audio_sync.py
+│   ├── test_core.py             # unit tests for core.py
+│   ├── test_credentials.py      # tests for credentials.py
+│   ├── test_integration.py      # integration tests (marker: integration)
+│   └── test_matcher.py          # tests for matcher.py
 ├── docs/
 ├── .github/workflows/ci.yml
 ├── .gitignore
@@ -52,6 +59,11 @@ export OPENSUBTITLES_USERNAME="your_username"
 export OPENSUBTITLES_PASSWORD="your_password"
 ```
 
+Credentials can also be saved automatically:
+on first use without env vars, the CLI prompts for username and password and saves them to
+`~/.config/subs-down-n-sync/credentials.enc` (encrypted with AES-128).
+Env vars always take priority over the saved file.
+
 ## How to run
 
 ```bash
@@ -65,6 +77,7 @@ subs-down-n-sync /path/to/folder/ --lang en
 subs-down-n-sync /path/to/folder/ --overwrite   # overwrite existing subtitles (re-download from API)
 subs-down-n-sync /path/to/folder/ --resync      # sync existing subtitle without hitting the API
 subs-down-n-sync /path/to/folder/ --parallel    # process up to 2 videos in parallel
+subs-down-n-sync /path/to/movie.mkv --whisper-model base  # larger Whisper model (more accurate)
 
 # Via Python module
 python -m subs_down_n_sync /path/to/movie.mkv

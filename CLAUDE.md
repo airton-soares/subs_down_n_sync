@@ -11,14 +11,21 @@ subs_down_n_sync/
 │       ├── __init__.py          # exporta __version__ e run
 │       ├── __main__.py          # permite python -m subs_down_n_sync
 │       ├── cli.py               # argparse + entry point main()
-│       ├── core.py              # toda a lógica de negócio
+│       ├── core.py              # orquestração: run(), find_and_download_subtitle()
+│       ├── credentials.py       # credenciais criptografadas (Fernet + machine-id)
+│       ├── matcher.py           # pick_subtitle(), SubtitleInfo, 4 tiers de match
+│       ├── audio_sync.py        # SyncResult, sync_subtitle() (ref), sync_by_audio() (whisper)
+│       ├── _srt_utils.py        # parsing/formatação SRT (módulo interno)
 │       └── exceptions.py        # todas as exceções do projeto
 ├── tests/
 │   ├── __init__.py
 │   ├── fixtures/
 │   │   └── mini.srt
-│   ├── test_core.py             # testes unitários
-│   └── test_integration.py      # testes de integração (marcador: integration)
+│   ├── test_audio_sync.py       # testes de audio_sync.py
+│   ├── test_core.py             # testes unitários de core.py
+│   ├── test_credentials.py      # testes de credentials.py
+│   ├── test_integration.py      # testes de integração (marcador: integration)
+│   └── test_matcher.py          # testes de matcher.py
 ├── docs/
 ├── .github/workflows/ci.yml
 ├── .gitignore
@@ -52,6 +59,11 @@ export OPENSUBTITLES_USERNAME="seu_usuario"
 export OPENSUBTITLES_PASSWORD="sua_senha"
 ```
 
+As credenciais também podem ser salvas automaticamente:
+no primeiro uso sem env vars, o CLI solicita usuário e senha e os salva em
+`~/.config/subs-down-n-sync/credentials.enc` (criptografado com AES-128).
+Env vars sempre têm prioridade sobre o arquivo.
+
 ## Como rodar
 
 ```bash
@@ -65,6 +77,7 @@ subs-down-n-sync /caminho/para/pasta/ --lang en
 subs-down-n-sync /caminho/para/pasta/ --overwrite   # sobrescreve legendas existentes (baixa da API)
 subs-down-n-sync /caminho/para/pasta/ --resync      # sincroniza legenda existente sem bater na API
 subs-down-n-sync /caminho/para/pasta/ --parallel    # processa até 2 vídeos simultâneos
+subs-down-n-sync /caminho/para/filme.mkv --whisper-model base  # modelo Whisper maior (mais preciso)
 
 # Via módulo Python
 python -m subs_down_n_sync /caminho/para/filme.mkv
