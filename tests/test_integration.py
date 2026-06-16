@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import pytest
 
-from subs_down_n_sync.audio_sync import SYNC_THRESHOLD_SECONDS, _align_cues_by_semantics, sync_subtitle
+from subs_down_n_sync.audio_sync import (
+    SYNC_THRESHOLD_SECONDS,
+    _align_cues_by_semantics,
+    sync_subtitle,
+)
 
 pytestmark = pytest.mark.integration
 

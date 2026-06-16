@@ -82,8 +82,7 @@ def pick_subtitle(
     ]
 
     release_pool = [
-        (s, sc, sim) for s, sc, sim in pool_with_sim
-        if "release_group" in set(s.get_matches(video))
+        (s, sc, sim) for s, sc, sim in pool_with_sim if "release_group" in set(s.get_matches(video))
     ]
     chosen_pool = release_pool if release_pool else pool_with_sim
     match_type = "release" if release_pool else "fallback"

@@ -40,8 +40,7 @@ def test_sync_by_audio_linear_offset(tmp_path, mocker):
     """sync_by_audio detecta e aplica offset linear quando std_dev baixo."""
     srt = tmp_path / "Filme.pt-BR.srt"
     srt.write_text(
-        "1\n00:00:05,000 --> 00:00:07,000\nolá\n\n"
-        "2\n00:00:10,000 --> 00:00:12,000\nmundo\n",
+        "1\n00:00:05,000 --> 00:00:07,000\nolá\n\n2\n00:00:10,000 --> 00:00:12,000\nmundo\n",
         encoding="utf-8",
     )
     video = tmp_path / "Filme.mkv"
@@ -55,6 +54,7 @@ def test_sync_by_audio_linear_offset(tmp_path, mocker):
     mocker.patch("subs_down_n_sync.audio_sync._transcribe", return_value=transcript)
 
     import numpy as np
+
     fake_embeddings = np.array([[1.0, 0.0], [0.0, 1.0]])
     mock_model = mocker.MagicMock()
     mock_model.encode.return_value = fake_embeddings
@@ -90,9 +90,7 @@ def test_sync_by_audio_passes_model_size(tmp_path, mocker):
     video.write_bytes(b"\x00" * 10)
 
     mocker.patch("subs_down_n_sync.audio_sync._extract_audio")
-    mock_transcribe = mocker.patch(
-        "subs_down_n_sync.audio_sync._transcribe", return_value=[]
-    )
+    mock_transcribe = mocker.patch("subs_down_n_sync.audio_sync._transcribe", return_value=[])
 
     sync_by_audio(srt, video, model_size="base")
 

@@ -12,19 +12,9 @@ import subliminal
 from babelfish import Language
 from subliminal.refiners.hash import refine as hash_refine
 
-from subs_down_n_sync._srt_utils import (
-    _SRT_BLOCK_RE,
-    _TS_RE,
-    _mean_offset_seconds,
-    _parse_srt_timestamps,
-    _read_text_detected,
-    _seconds_to_ts,
-    _ts,
-)
 from subs_down_n_sync.audio_sync import (
     ProgressCallback,
     SyncResult,
-    _align_cues_by_semantics,
     sync_by_audio,
     sync_subtitle,
 )
@@ -39,7 +29,6 @@ from subs_down_n_sync.exceptions import (
 from subs_down_n_sync.matcher import (
     SCORE_THRESHOLD,
     SubtitleInfo,
-    _compute_needs_sync,
     _filename_similarity,
     pick_subtitle,
 )
@@ -256,7 +245,10 @@ def run(
                     model_size=whisper_model,
                     on_progress=on_progress,
                 )
-                _notify("sincronizado", f"modo={sync_result.sync_mode} offset={sync_result.offset_seconds:.2f}s")
+                _notify(
+                    "sincronizado",
+                    f"modo={sync_result.sync_mode} offset={sync_result.offset_seconds:.2f}s",
+                )
             except SubtitleSyncError as e:
                 sync_error = str(e)
                 sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")

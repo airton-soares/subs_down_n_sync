@@ -143,8 +143,13 @@ def _extract_audio(video_path: Path, output_wav: Path, duration_s: int = 600) ->
     """Extrai trecho de áudio mono 16kHz do vídeo via ffmpeg."""
     probe = subprocess.run(
         [
-            "ffprobe", "-v", "quiet", "-print_format", "json",
-            "-show_format", str(video_path),
+            "ffprobe",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_format",
+            str(video_path),
         ],
         capture_output=True,
         text=True,
@@ -155,8 +160,20 @@ def _extract_audio(video_path: Path, output_wav: Path, duration_s: int = 600) ->
 
     subprocess.run(
         [
-            "ffmpeg", "-y", "-ss", str(start), "-i", str(video_path),
-            "-t", str(duration_s), "-ac", "1", "-ar", "16000", "-vn", str(output_wav),
+            "ffmpeg",
+            "-y",
+            "-ss",
+            str(start),
+            "-i",
+            str(video_path),
+            "-t",
+            str(duration_s),
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-vn",
+            str(output_wav),
         ],
         capture_output=True,
         check=True,
@@ -223,8 +240,7 @@ def sync_by_audio(
     aligned_ts = [c["start"] for c in aligned_cues]
 
     deltas = [
-        aligned_ts[i] - target_ts_orig[i]
-        for i in range(min(len(target_ts_orig), len(aligned_ts)))
+        aligned_ts[i] - target_ts_orig[i] for i in range(min(len(target_ts_orig), len(aligned_ts)))
     ]
 
     if not deltas:
