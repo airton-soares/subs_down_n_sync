@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from subs_down_n_sync.matcher import SubtitleInfo, _filename_similarity, pick_subtitle
+from subs_down_n_sync.matcher import SubtitleInfo, filename_similarity, pick_subtitle
 
 
 def _make_sub(matches: set, filename: str = "", provider: str = "opensubtitles") -> MagicMock:
@@ -21,17 +21,17 @@ def _make_video(name: str = "Filme.2024.1080p.BluRay.mkv") -> MagicMock:
 
 class TestFilenameSimilarity:
     def test_identical_names(self):
-        assert _filename_similarity("Filme.mkv", "Filme.mkv") == pytest.approx(1.0)
+        assert filename_similarity("Filme.mkv", "Filme.mkv") == pytest.approx(1.0)
 
     def test_no_overlap(self):
-        assert _filename_similarity("OutroFilme.srt", "Filme.mkv") == pytest.approx(0.0)
+        assert filename_similarity("OutroFilme.srt", "Filme.mkv") == pytest.approx(0.0)
 
     def test_partial_overlap(self):
-        sim = _filename_similarity("Filme.2024.srt", "Filme.2024.BluRay.mkv")
+        sim = filename_similarity("Filme.2024.srt", "Filme.2024.BluRay.mkv")
         assert 0.0 < sim < 1.0
 
     def test_empty_video_name(self):
-        assert _filename_similarity("Filme.srt", "") == pytest.approx(0.0)
+        assert filename_similarity("Filme.srt", "") == pytest.approx(0.0)
 
 
 class TestTier1Hash:

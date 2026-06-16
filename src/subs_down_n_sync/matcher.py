@@ -31,7 +31,7 @@ def _compute_needs_sync(match_type: str, similarity: float) -> bool:
     return similarity < SCORE_THRESHOLD
 
 
-def _filename_similarity(sub_filename: str, video_name: str) -> float:
+def filename_similarity(sub_filename: str, video_name: str) -> float:
     norm = re.compile(r"[\W_]+")
     video_stem = Path(video_name).stem
     sub_tokens = set(norm.sub(" ", sub_filename.lower()).split())
@@ -77,7 +77,7 @@ def pick_subtitle(
 
     # Tier 3: melhor filename similarity (release_group candidates primeiro)
     pool_with_sim = [
-        (sub, score, _filename_similarity(getattr(sub, "filename", "") or "", video_name))
+        (sub, score, filename_similarity(getattr(sub, "filename", "") or "", video_name))
         for sub, score in scored
     ]
 
