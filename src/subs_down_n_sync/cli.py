@@ -19,6 +19,7 @@ from rich.progress import (
 from rich.table import Table
 
 from subs_down_n_sync.core import DEFAULT_LANG, VIDEO_EXTENSIONS, RunSummary, run
+from subs_down_n_sync.credentials import load_credentials
 from subs_down_n_sync.exceptions import SubsDownError
 
 MAX_PARALLEL_WORKERS = 2
@@ -172,6 +173,8 @@ def _run_directory(
 
     if not to_process:
         return results, skipped, errors
+
+    load_credentials()
 
     progress = _make_batch_progress()
     overall = progress.add_task(
@@ -350,6 +353,8 @@ def main(argv: list[str] | None = None) -> int:
     if not p.exists():
         err_console.print(f"[bold red]Erro:[/bold red] Caminho não existe: {p}")
         return 1
+
+    load_credentials()
 
     progress = _make_progress()
     task_id: TaskID | None = None
