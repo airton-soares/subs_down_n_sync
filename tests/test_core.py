@@ -524,6 +524,52 @@ def test_main_success_prints_summary(tmp_path, monkeypatch, mocker, capsys):
     assert "0.42" in captured.out
 
 
+def test_main_loads_credentials_before_opening_progress_live(tmp_path, mocker):
+    """Credenciais devem ser resolvidas antes do Rich Live abrir.
+
+    Caso contrário, o prompt de input()/getpass() fica invisível sob o
+    redesenho contínuo do spinner, parecendo um loop infinito em
+    'Validando vídeo...'.
+    """
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+
+    call_order: list[str] = []
+    mocker.patch(
+        "subs_down_n_sync.cli.load_credentials",
+        side_effect=lambda: call_order.append("load_credentials"),
+    )
+
+    from rich.progress import Progress
+
+    original_enter = Progress.__enter__
+
+    def tracking_enter(self):
+        call_order.append("progress_live_start")
+        return original_enter(self)
+
+    mocker.patch.object(Progress, "__enter__", tracking_enter)
+
+    fake_summary = RunSummary(
+        output_path=tmp_path / "Filme.pt-BR.srt",
+        provider="opensubtitles",
+        match_type="hash",
+        synced=True,
+        offset_seconds=0.0,
+        sync_mode="ref",
+        sync_error=None,
+        elapsed_seconds=0.1,
+        lang_tag="pt-BR",
+    )
+    mocker.patch("subs_down_n_sync.cli.run", return_value=fake_summary)
+
+    main([str(video)])
+
+    assert call_order == ["load_credentials", "progress_live_start"]
+
+
 def test_main_lang_flag_uses_custom_language(tmp_path, monkeypatch, mocker):
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
@@ -551,8 +597,10 @@ def test_main_lang_flag_uses_custom_language(tmp_path, monkeypatch, mocker):
     assert mock_run.call_args.kwargs["lang_tag"] == "en"
 
 
-def test_main_prints_sync_error_in_yellow(tmp_path, mocker, capsys):
+def test_main_prints_sync_error_in_yellow(tmp_path, monkeypatch, mocker, capsys):
     """_print_summary com sync_error → painel amarelo com detalhe do erro."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     video = tmp_path / "Filme.mkv"
     video.write_bytes(b"\x00" * 10)
 
@@ -577,10 +625,12 @@ def test_main_prints_sync_error_in_yellow(tmp_path, mocker, capsys):
     assert "alinhamento semântico falhou" in captured.out
 
 
-def test_main_returns_1_on_subsdown_error(tmp_path, mocker, capsys):
+def test_main_returns_1_on_subsdown_error(tmp_path, monkeypatch, mocker, capsys):
     """run() lança SubsDownError no single-file → main retorna 1, imprime erro."""
     from subs_down_n_sync.exceptions import SubtitleNotFoundError
 
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     video = tmp_path / "Filme.mkv"
     video.write_bytes(b"\x00" * 10)
 
@@ -1575,10 +1625,12 @@ def test_build_parser_resync_short_flag():
     assert args.resync is True
 
 
-def test_run_directory_processes_all_videos(tmp_path, mocker):
+def test_run_directory_processes_all_videos(tmp_path, monkeypatch, mocker):
     from subs_down_n_sync.cli import _run_directory
     from subs_down_n_sync.core import RunSummary
 
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     v1 = tmp_path / "a.mkv"
     v2 = tmp_path / "b.mp4"
     v1.write_bytes(b"\x00")
@@ -1623,10 +1675,12 @@ def test_run_directory_skips_when_srt_exists_and_no_resync(tmp_path, mocker):
     assert len(results) == 0
 
 
-def test_run_directory_processes_existing_srt_when_resync_true(tmp_path, mocker):
+def test_run_directory_processes_existing_srt_when_resync_true(tmp_path, monkeypatch, mocker):
     from subs_down_n_sync.cli import _run_directory
     from subs_down_n_sync.core import RunSummary
 
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     v = tmp_path / "filme.mkv"
     v.write_bytes(b"\x00")
     srt = tmp_path / "filme.pt-BR.srt"
@@ -1654,11 +1708,13 @@ def test_run_directory_processes_existing_srt_when_resync_true(tmp_path, mocker)
     assert len(skipped) == 0
 
 
-def test_run_directory_continues_after_error(tmp_path, mocker):
+def test_run_directory_continues_after_error(tmp_path, monkeypatch, mocker):
     from subs_down_n_sync.cli import _run_directory
     from subs_down_n_sync.core import RunSummary
     from subs_down_n_sync.exceptions import SubsDownError
 
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     v1 = tmp_path / "a.mkv"
     v2 = tmp_path / "b.mkv"
     v1.write_bytes(b"\x00")
@@ -1691,10 +1747,12 @@ def test_run_directory_continues_after_error(tmp_path, mocker):
     assert "falhou" in errors[0][1]
 
 
-def test_run_directory_finds_videos_recursively(tmp_path, mocker):
+def test_run_directory_finds_videos_recursively(tmp_path, monkeypatch, mocker):
     from subs_down_n_sync.cli import _run_directory
     from subs_down_n_sync.core import RunSummary
 
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     subdir = tmp_path / "sub"
     subdir.mkdir()
     v = subdir / "filme.mkv"
@@ -1844,8 +1902,10 @@ def test_main_batch_summary_shows_sync_error_status(tmp_path, mocker, capsys):
     assert "aviso" in captured.out
 
 
-def test_main_single_file_on_progress_updates_task(tmp_path, mocker, capsys):
+def test_main_single_file_on_progress_updates_task(tmp_path, monkeypatch, mocker, capsys):
     """on_progress no single-file: primeira chamada cria task, subsequentes atualizam."""
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     video = tmp_path / "Filme.mkv"
     video.write_bytes(b"\x00" * 10)
 
@@ -1952,10 +2012,12 @@ def test_main_passes_parallel_flag_to_run_directory(tmp_path, mocker):
     )
 
 
-def test_run_directory_parallel_processes_all_videos(tmp_path, mocker):
+def test_run_directory_parallel_processes_all_videos(tmp_path, monkeypatch, mocker):
     from subs_down_n_sync.cli import _run_directory
     from subs_down_n_sync.core import RunSummary
 
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     v1 = tmp_path / "a.mkv"
     v2 = tmp_path / "b.mp4"
     v3 = tmp_path / "c.mkv"
@@ -1984,11 +2046,13 @@ def test_run_directory_parallel_processes_all_videos(tmp_path, mocker):
     assert len(errors) == 0
 
 
-def test_run_directory_parallel_continues_after_error(tmp_path, mocker):
+def test_run_directory_parallel_continues_after_error(tmp_path, monkeypatch, mocker):
     from subs_down_n_sync.cli import _run_directory
     from subs_down_n_sync.core import RunSummary
     from subs_down_n_sync.exceptions import SubsDownError
 
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     v1 = tmp_path / "a.mkv"
     v2 = tmp_path / "b.mkv"
     v1.write_bytes(b"\x00")
@@ -2022,10 +2086,12 @@ def test_run_directory_parallel_continues_after_error(tmp_path, mocker):
     assert errors[0][0] == v1
 
 
-def test_run_directory_invokes_on_progress_callback(tmp_path, mocker):
+def test_run_directory_invokes_on_progress_callback(tmp_path, monkeypatch, mocker):
     from subs_down_n_sync.cli import _run_directory
     from subs_down_n_sync.core import RunSummary
 
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     v = tmp_path / "filme.mkv"
     v.write_bytes(b"\x00")
 
@@ -2077,10 +2143,12 @@ def test_main_passes_resync_flag_to_run_directory(tmp_path, mocker):
     )
 
 
-def test_run_directory_overwrite_wins_over_resync(tmp_path, mocker):
+def test_run_directory_overwrite_wins_over_resync(tmp_path, monkeypatch, mocker):
     from subs_down_n_sync.cli import _run_directory
     from subs_down_n_sync.core import RunSummary
 
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     v = tmp_path / "filme.mkv"
     v.write_bytes(b"\x00")
     srt = tmp_path / "filme.pt-BR.srt"
