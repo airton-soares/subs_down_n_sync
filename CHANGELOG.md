@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.3.3 (2026-06-17)
+
+### Bug Fixes
+
+- Carregar credenciais antes do Rich Live abrir
+  ([`cacc25c`](https://github.com/airton-soares/subs_down_n_sync/commit/cacc25ce93acb89d7bed3b66c89e70acf777125d))
+
+
 ## v1.3.2 (2026-06-16)
 
 ### Bug Fixes
