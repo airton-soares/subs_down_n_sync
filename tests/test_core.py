@@ -2143,6 +2143,109 @@ def test_main_passes_resync_flag_to_run_directory(tmp_path, mocker):
     )
 
 
+def test_build_parser_whisper_model_defaults_to_tiny():
+    from subs_down_n_sync.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["/any/path"])
+    assert args.whisper_model == "tiny"
+
+
+def test_build_parser_whisper_model_accepts_valid_choice():
+    from subs_down_n_sync.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["/any/path", "--whisper-model", "small"])
+    assert args.whisper_model == "small"
+
+
+def test_build_parser_whisper_model_rejects_invalid_choice():
+    from subs_down_n_sync.cli import build_parser
+
+    parser = build_parser()
+    with pytest.raises(SystemExit) as exc:
+        parser.parse_args(["/any/path", "--whisper-model", "gigante"])
+    assert exc.value.code == 2
+
+
+def test_main_passes_whisper_model_flag_to_run_directory(tmp_path, mocker):
+    from subs_down_n_sync.cli import main
+
+    v = tmp_path / "filme.mkv"
+    v.write_bytes(b"\x00")
+
+    mock_run_dir = mocker.patch(
+        "subs_down_n_sync.cli._run_directory",
+        return_value=([], [], []),
+    )
+
+    main([str(tmp_path), "--whisper-model", "base"])
+
+    mock_run_dir.assert_called_once_with(
+        tmp_path,
+        lang_tag="pt-BR",
+        overwrite=False,
+        resync=False,
+        parallel=False,
+        whisper_model="base",
+    )
+
+
+def test_main_passes_whisper_model_flag_to_run(tmp_path, monkeypatch, mocker):
+    from subs_down_n_sync.cli import main
+
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
+
+    video = tmp_path / "Filme.mkv"
+    video.write_bytes(b"\x00" * 10)
+
+    fake_summary = RunSummary(
+        output_path=tmp_path / "Filme.pt-BR.srt",
+        provider="opensubtitles",
+        match_type="hash",
+        synced=False,
+        offset_seconds=0.0,
+        sync_mode="none",
+        sync_error=None,
+        elapsed_seconds=0.1,
+        lang_tag="pt-BR",
+    )
+    mock_run = mocker.patch("subs_down_n_sync.cli.run", return_value=fake_summary)
+
+    code = main([str(video), "--whisper-model", "small"])
+
+    assert code == 0
+    assert mock_run.call_args.kwargs["whisper_model"] == "small"
+
+
+def test_run_directory_passes_whisper_model_to_run(tmp_path, monkeypatch, mocker):
+    from subs_down_n_sync.cli import _run_directory
+
+    monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
+    monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
+    v = tmp_path / "filme.mkv"
+    v.write_bytes(b"\x00")
+
+    fake_summary = RunSummary(
+        output_path=tmp_path / "filme.pt-BR.srt",
+        provider="opensubtitles",
+        match_type="hash",
+        synced=False,
+        offset_seconds=0.0,
+        sync_mode="none",
+        sync_error=None,
+        elapsed_seconds=0.1,
+        lang_tag="pt-BR",
+    )
+    mock_run = mocker.patch("subs_down_n_sync.cli.run", return_value=fake_summary)
+
+    _run_directory(tmp_path, lang_tag="pt-BR", whisper_model="medium")
+
+    assert mock_run.call_args.kwargs["whisper_model"] == "medium"
+
+
 def test_run_directory_overwrite_wins_over_resync(tmp_path, monkeypatch, mocker):
     from subs_down_n_sync.cli import _run_directory
     from subs_down_n_sync.core import RunSummary
