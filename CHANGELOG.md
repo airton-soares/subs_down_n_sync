@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-06-28)
+
+### Code Style
+
+- Corrigir linha longa em core.py (E501)
+  ([`c94a3ae`](https://github.com/airton-soares/subs_down_n_sync/commit/c94a3ae024bc43a73aae2d70822adf870bb3059c))
+
+### Features
+
+- Adicionar --ref-lang e limitar referência ao tier 3
+  ([`6778f4c`](https://github.com/airton-soares/subs_down_n_sync/commit/6778f4c76e85e97e92c9b6003641222e641b2c9d))
+
+### Testing
+
+- Cobrir wiring de --whisper-model no CLI
+  ([`8d0a3b4`](https://github.com/airton-soares/subs_down_n_sync/commit/8d0a3b4ad62429d4fd672643f4e172f56029e724))
+
+
 ## v1.3.3 (2026-06-17)
 
 ### Bug Fixes
