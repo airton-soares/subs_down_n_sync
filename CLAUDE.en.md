@@ -78,6 +78,7 @@ subs-down-n-sync /path/to/folder/ --overwrite   # overwrite existing subtitles (
 subs-down-n-sync /path/to/folder/ --resync      # sync existing subtitle without hitting the API
 subs-down-n-sync /path/to/folder/ --parallel    # process up to 2 videos in parallel
 subs-down-n-sync /path/to/movie.mkv --whisper-model base  # larger Whisper model (more accurate)
+subs-down-n-sync /path/to/movie.mkv --ref-lang es         # non-English original language
 
 # Via Python module
 python -m subs_down_n_sync /path/to/movie.mkv

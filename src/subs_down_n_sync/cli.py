@@ -31,8 +31,8 @@ _STEP_LABELS: dict[str, str] = {
     "validando": "Validando vídeo...",
     "buscando": "Buscando legenda no OpenSubtitles...",
     "baixado": "Legenda encontrada e baixada",
-    "referencia": "Baixando legenda EN de referência...",
-    "sem_referencia": "Referência EN não disponível — tentando audio sync...",
+    "referencia": "Baixando legenda de referência...",
+    "sem_referencia": "Referência não disponível — legenda usada sem sincronização",
     "sincronizando": "Sincronizando via embeddings semânticos...",
     "sincronizado": "Sincronização concluída",
     "sem_sync": "Legenda já sincronizada",
@@ -129,6 +129,7 @@ def _process_video(
     resync: bool = False,
     overwrite: bool = False,
     whisper_model: str = "tiny",
+    ref_lang: str = "en",
 ) -> RunSummary:
     task_id = progress.add_task(video.name, detail="aguardando...", total=None)
 
@@ -144,6 +145,7 @@ def _process_video(
             resync=resync,
             overwrite=overwrite,
             whisper_model=whisper_model,
+            ref_lang=ref_lang,
         )
     finally:
         progress.remove_task(task_id)
@@ -156,6 +158,7 @@ def _run_directory(
     resync: bool = False,
     parallel: bool = False,
     whisper_model: str = "tiny",
+    ref_lang: str = "en",
 ) -> tuple[list[RunSummary], list[Path], list[tuple[Path, str]]]:
     videos = sorted(p for p in dir_path.rglob("*") if p.suffix.lower() in VIDEO_EXTENSIONS)
 
@@ -196,6 +199,7 @@ def _run_directory(
                         effective_resync,
                         overwrite,
                         whisper_model,
+                        ref_lang,
                     ): v
                     for v in to_process
                 }
@@ -218,6 +222,7 @@ def _run_directory(
                             effective_resync,
                             overwrite,
                             whisper_model,
+                            ref_lang,
                         )
                     )
                 except SubsDownError as e:
@@ -327,6 +332,14 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["tiny", "base", "small", "medium", "large"],
         help="Modelo Whisper para audio sync (padrão: tiny)",
     )
+    parser.add_argument(
+        "--ref-lang",
+        default="en",
+        help=(
+            "Idioma da legenda de referência usada na sincronização (tag BCP 47). "
+            "Deve ser o idioma original do conteúdo. Padrão: en."
+        ),
+    )
     return parser
 
 
@@ -337,6 +350,7 @@ def main(argv: list[str] | None = None) -> int:
     p = Path(args.path).expanduser()
 
     whisper_model = args.whisper_model
+    ref_lang = args.ref_lang
 
     if p.is_dir():
         results, skipped, errors = _run_directory(
@@ -346,6 +360,7 @@ def main(argv: list[str] | None = None) -> int:
             resync=args.resync,
             parallel=args.parallel,
             whisper_model=whisper_model,
+            ref_lang=ref_lang,
         )
         _print_batch_summary(results, skipped, errors)
         return 1 if errors else 0
@@ -385,6 +400,7 @@ def main(argv: list[str] | None = None) -> int:
                 resync=args.resync,
                 overwrite=args.overwrite,
                 whisper_model=whisper_model,
+                ref_lang=ref_lang,
             )
         except SubsDownError as e:
             progress.stop()

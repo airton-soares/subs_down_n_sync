@@ -88,6 +88,7 @@ def test_load_credentials_returns_tuple_when_both_set(monkeypatch):
 def test_load_credentials_falls_back_to_prompt_when_username_missing(monkeypatch, mocker):
     monkeypatch.delenv("OPENSUBTITLES_USERNAME", raising=False)
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "x")
+    mocker.patch("subs_down_n_sync.credentials._load_from_file", return_value=None)
     mocker.patch(
         "subs_down_n_sync.credentials._prompt_and_save",
         return_value=("promptuser", "promptpass"),
@@ -100,6 +101,7 @@ def test_load_credentials_falls_back_to_prompt_when_username_missing(monkeypatch
 def test_load_credentials_falls_back_to_prompt_when_both_missing(monkeypatch, mocker):
     monkeypatch.delenv("OPENSUBTITLES_USERNAME", raising=False)
     monkeypatch.delenv("OPENSUBTITLES_PASSWORD", raising=False)
+    mocker.patch("subs_down_n_sync.credentials._load_from_file", return_value=None)
     mocker.patch(
         "subs_down_n_sync.credentials._prompt_and_save",
         return_value=("promptuser", "promptpass"),
@@ -310,6 +312,56 @@ def test_find_reference_subtitle_returns_none_when_text_empty(tmp_path, mocker):
     result = find_reference_subtitle(video_path, credentials=("u", "p"))
 
     assert result is None
+
+
+def test_find_reference_subtitle_returns_none_when_tier4(tmp_path, mocker):
+    """Único candidato com match tier 4 (baixa confiança) → retorna None sem baixar."""
+    fake_video = Episode("Filme.S01E01", "Filme", 1, 1)
+    mocker.patch("subs_down_n_sync.core.subliminal.scan_video", return_value=fake_video)
+    mocker.patch("subs_down_n_sync.core.hash_refine")
+
+    fake_sub = mocker.MagicMock()
+    fake_sub.text = "conteudo"
+    fake_sub.get_path.return_value = "Filme.en.srt"
+    fake_sub.language = Language("eng")
+    fake_sub.get_matches.return_value = set()
+    fake_sub.filename = "completamente_diferente.srt"
+    fake_sub.provider_name = "opensubtitles"
+
+    mocker.patch(
+        "subs_down_n_sync.core.subliminal.list_subtitles",
+        return_value={fake_video: [fake_sub]},
+    )
+    mock_download = mocker.patch("subs_down_n_sync.core.subliminal.download_subtitles")
+
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+
+    result = find_reference_subtitle(video_path, credentials=("u", "p"))
+
+    assert result is None
+    mock_download.assert_not_called()
+
+
+def test_find_reference_subtitle_uses_custom_ref_lang(tmp_path, mocker):
+    """ref_lang customizado → list_subtitles chamado com idioma correto."""
+    fake_video = Episode("Filme.S01E01", "Filme", 1, 1)
+    mocker.patch("subs_down_n_sync.core.subliminal.scan_video", return_value=fake_video)
+    mocker.patch("subs_down_n_sync.core.hash_refine")
+
+    mock_list = mocker.patch(
+        "subs_down_n_sync.core.subliminal.list_subtitles",
+        return_value={fake_video: []},
+    )
+
+    video_path = tmp_path / "Filme.mkv"
+    video_path.write_bytes(b"\x00" * 10)
+
+    result = find_reference_subtitle(video_path, credentials=("u", "p"), ref_lang="es")
+
+    assert result is None
+    called_langs = mock_list.call_args[0][1]
+    assert Language.fromietf("es") in called_langs
 
 
 def test_parse_srt_timestamps_extracts_start_times():
@@ -711,11 +763,11 @@ def test_compute_needs_sync_release_always_false():
 
 
 def test_compute_needs_sync_fallback_below_threshold_is_true():
-    assert _compute_needs_sync("fallback", 0.89) is True
+    assert _compute_needs_sync("fallback", 0.79) is True
 
 
 def test_compute_needs_sync_fallback_at_threshold_is_false():
-    assert _compute_needs_sync("fallback", 0.9) is False
+    assert _compute_needs_sync("fallback", 0.8) is False
 
 
 def test_compute_needs_sync_fallback_above_threshold_is_false():
@@ -891,7 +943,7 @@ def test_run_calls_sync_when_needs_sync_true(tmp_path, monkeypatch, mocker):
 
 
 def test_run_skips_sync_when_no_reference_available(tmp_path, monkeypatch, mocker):
-    """needs_sync=True mas EN não disponível → sem sync, sem erro fatal."""
+    """needs_sync=True mas referência não disponível → legenda usada sem sync, sem erro."""
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "user")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "pass")
     mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
@@ -917,16 +969,14 @@ def test_run_skips_sync_when_no_reference_available(tmp_path, monkeypatch, mocke
     mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
     mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=None)
     mock_sync = mocker.patch("subs_down_n_sync.core.sync_subtitle")
-    mocker.patch(
-        "subs_down_n_sync.core.sync_by_audio",
-        side_effect=SubtitleSyncError("audio sync indisponível"),
-    )
+    mock_audio_sync = mocker.patch("subs_down_n_sync.core.sync_by_audio")
 
     summary = run(str(video), lang_tag="pt-BR")
 
     mock_sync.assert_not_called()
+    mock_audio_sync.assert_not_called()
     assert summary.synced is False
-    assert summary.sync_error is not None
+    assert summary.sync_error is None
 
 
 def test_run_resync_uses_existing_subtitle_dotted_name(tmp_path, monkeypatch, mocker):
@@ -1810,6 +1860,7 @@ def test_main_dispatches_to_run_directory_when_path_is_dir(tmp_path, mocker):
         resync=False,
         parallel=False,
         whisper_model="tiny",
+        ref_lang="en",
     )
     assert code == 0
 
@@ -1962,6 +2013,7 @@ def test_main_passes_overwrite_flag_to_run_directory(tmp_path, mocker):
         resync=False,
         parallel=False,
         whisper_model="tiny",
+        ref_lang="en",
     )
 
 
@@ -1989,6 +2041,46 @@ def test_build_parser_parallel_short_flag():
     assert args.parallel is True
 
 
+def test_build_parser_ref_lang_defaults_to_en():
+    from subs_down_n_sync.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["/any/path"])
+    assert args.ref_lang == "en"
+
+
+def test_build_parser_ref_lang_accepts_custom_value():
+    from subs_down_n_sync.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["/any/path", "--ref-lang", "es"])
+    assert args.ref_lang == "es"
+
+
+def test_main_passes_ref_lang_to_run_directory(tmp_path, mocker):
+    from subs_down_n_sync.cli import main
+
+    v = tmp_path / "filme.mkv"
+    v.write_bytes(b"\x00")
+
+    mock_run_dir = mocker.patch(
+        "subs_down_n_sync.cli._run_directory",
+        return_value=([], [], []),
+    )
+
+    main([str(tmp_path), "--ref-lang", "es"])
+
+    mock_run_dir.assert_called_once_with(
+        tmp_path,
+        lang_tag="pt-BR",
+        overwrite=False,
+        resync=False,
+        parallel=False,
+        whisper_model="tiny",
+        ref_lang="es",
+    )
+
+
 def test_main_passes_parallel_flag_to_run_directory(tmp_path, mocker):
     from subs_down_n_sync.cli import main
 
@@ -2009,6 +2101,7 @@ def test_main_passes_parallel_flag_to_run_directory(tmp_path, mocker):
         resync=False,
         parallel=True,
         whisper_model="tiny",
+        ref_lang="en",
     )
 
 
@@ -2140,6 +2233,7 @@ def test_main_passes_resync_flag_to_run_directory(tmp_path, mocker):
         resync=True,
         parallel=False,
         whisper_model="tiny",
+        ref_lang="en",
     )
 
 
@@ -2188,6 +2282,7 @@ def test_main_passes_whisper_model_flag_to_run_directory(tmp_path, mocker):
         resync=False,
         parallel=False,
         whisper_model="base",
+        ref_lang="en",
     )
 
 
@@ -2366,8 +2461,8 @@ def test_run_uses_audio_sync_when_tier4(tmp_path, monkeypatch, mocker):
     assert summary.match_tier == 4
 
 
-def test_run_falls_back_to_audio_when_no_ref(tmp_path, monkeypatch, mocker):
-    """needs_sync=True + ref EN ausente → sync_by_audio chamado."""
+def test_run_uses_subtitle_as_is_when_no_ref(tmp_path, monkeypatch, mocker):
+    """needs_sync=True + referência ausente → legenda usada sem sync, audio sync não chamado."""
     monkeypatch.setenv("OPENSUBTITLES_USERNAME", "u")
     monkeypatch.setenv("OPENSUBTITLES_PASSWORD", "p")
     mocker.patch("subs_down_n_sync.core.shutil.which", return_value="/usr/bin/ffmpeg")
@@ -2390,19 +2485,15 @@ def test_run_falls_back_to_audio_when_no_ref(tmp_path, monkeypatch, mocker):
 
     mocker.patch("subs_down_n_sync.core.find_and_download_subtitle", side_effect=fake_find)
     mocker.patch("subs_down_n_sync.core.find_reference_subtitle", return_value=None)
-    from subs_down_n_sync.audio_sync import SyncResult
-
-    mock_audio = mocker.patch(
-        "subs_down_n_sync.core.sync_by_audio",
-        return_value=SyncResult(synced=True, offset_seconds=1.5, sync_mode="audio_linear"),
-    )
+    mock_audio = mocker.patch("subs_down_n_sync.core.sync_by_audio")
 
     from subs_down_n_sync.core import run
 
     summary = run(str(video), lang_tag="pt-BR")
 
-    mock_audio.assert_called_once()
-    assert summary.synced is True
+    mock_audio.assert_not_called()
+    assert summary.synced is False
+    assert summary.sync_error is None
 
 
 def test_run_runsummary_includes_match_tier(tmp_path, monkeypatch, mocker):

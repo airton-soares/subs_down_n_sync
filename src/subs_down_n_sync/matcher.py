@@ -7,7 +7,7 @@ from typing import Any
 
 from subliminal.score import compute_score
 
-SCORE_THRESHOLD = 0.9
+SCORE_THRESHOLD = 0.8
 _TIER4_THRESHOLD = 0.3
 _METADATA_FIELDS = frozenset({"year", "season", "episode", "imdb_id"})
 
