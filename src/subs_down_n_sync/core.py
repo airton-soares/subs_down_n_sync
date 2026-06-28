@@ -263,7 +263,9 @@ def run(
                 _notify("erro_sync", str(e))
         else:
             _notify("referencia", f"buscando {ref_lang}")
-            ref_path = find_reference_subtitle(video_path, credentials=credentials, ref_lang=ref_lang)
+            ref_path = find_reference_subtitle(
+                video_path, credentials=credentials, ref_lang=ref_lang
+            )
 
             if ref_path:
                 _notify("sincronizando", "embeddings semânticos")
