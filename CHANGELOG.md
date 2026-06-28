@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.1 (2026-06-28)
+
+### Performance Improvements
+
+- **audio_sync**: Cachear modelos ML e suprimir logs de carregamento
+  ([`95233a9`](https://github.com/airton-soares/subs_down_n_sync/commit/95233a9c9608ad5e5c894fc80dc400cef8ca588c))
+
+
 ## v1.4.0 (2026-06-28)
 
 ### Code Style
