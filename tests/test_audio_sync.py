@@ -1,5 +1,8 @@
+import logging
+
 import pytest
 
+import subs_down_n_sync.audio_sync as _audio_mod
 from subs_down_n_sync.audio_sync import SyncResult, sync_by_audio, sync_subtitle
 
 
@@ -58,7 +61,7 @@ def test_sync_by_audio_linear_offset(tmp_path, mocker):
     fake_embeddings = np.array([[1.0, 0.0], [0.0, 1.0]])
     mock_model = mocker.MagicMock()
     mock_model.encode.return_value = fake_embeddings
-    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync._get_sentence_model", return_value=mock_model)
 
     result = sync_by_audio(srt, video)
 
@@ -104,3 +107,43 @@ def test_sync_result_dataclass():
     assert r.synced is True
     assert r.offset_seconds == pytest.approx(2.5)
     assert r.sync_mode == "audio_linear"
+
+
+def test_sentence_model_logs_suprimidos():
+    """Loggers de bibliotecas de ML devem estar em WARNING para não poluir saída."""
+    assert logging.getLogger("faster_whisper").level == logging.WARNING
+    assert logging.getLogger("ctranslate2").level == logging.WARNING
+    assert logging.getLogger("sentence_transformers").level == logging.WARNING
+
+
+def test_get_sentence_model_cache_evita_recarga(mocker):
+    """_get_sentence_model carrega SentenceTransformer apenas na primeira chamada."""
+    _audio_mod._sentence_model_cache = None
+    mock_ctor = mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer")
+
+    _audio_mod._get_sentence_model()
+    _audio_mod._get_sentence_model()
+
+    mock_ctor.assert_called_once()
+
+
+def test_get_whisper_model_cache_evita_recarga(mocker):
+    """_get_whisper_model carrega WhisperModel apenas uma vez para mesmo model_size."""
+    _audio_mod._whisper_model_cache = None
+    mock_ctor = mocker.patch("subs_down_n_sync.audio_sync.WhisperModel")
+
+    _audio_mod._get_whisper_model("tiny")
+    _audio_mod._get_whisper_model("tiny")
+
+    mock_ctor.assert_called_once()
+
+
+def test_get_whisper_model_recarrega_ao_mudar_tamanho(mocker):
+    """_get_whisper_model recarrega WhisperModel quando model_size muda."""
+    _audio_mod._whisper_model_cache = None
+    mock_ctor = mocker.patch("subs_down_n_sync.audio_sync.WhisperModel")
+
+    _audio_mod._get_whisper_model("tiny")
+    _audio_mod._get_whisper_model("base")
+
+    assert mock_ctor.call_count == 2

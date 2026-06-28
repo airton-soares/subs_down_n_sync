@@ -1363,7 +1363,7 @@ def test_align_cues_by_semantics_simple_1to1(mocker):
     mock_model.encode.side_effect = lambda texts, **kw: np.array(
         [fake_embeddings[t] for t in texts]
     )
-    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync._get_sentence_model", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -1395,7 +1395,7 @@ def test_align_cues_by_semantics_preserves_target_duration(mocker):
     mock_model.encode.side_effect = lambda texts, **kw: np.array(
         [fake_embeddings[t] for t in texts]
     )
-    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync._get_sentence_model", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -1423,7 +1423,7 @@ def test_align_cues_by_semantics_enforces_min_reading_duration(mocker):
     mock_model.encode.side_effect = lambda texts, **kw: np.array(
         [fake_embeddings[t] for t in texts]
     )
-    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync._get_sentence_model", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -1451,7 +1451,7 @@ def test_align_cues_by_semantics_clamps_end_to_next_start(mocker):
 
     mock_model = mocker.MagicMock()
     mock_model.encode.side_effect = fake_encode
-    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync._get_sentence_model", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -1479,7 +1479,7 @@ def test_align_cues_by_semantics_preserves_order(mocker):
 
     mock_model = mocker.MagicMock()
     mock_model.encode.side_effect = fake_encode
-    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync._get_sentence_model", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -1508,7 +1508,7 @@ def test_align_cues_uses_original_timestamps_when_no_dtw_mapping(mocker):
 
     mock_model = mocker.MagicMock()
     mock_model.encode.side_effect = fake_encode
-    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync._get_sentence_model", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 
@@ -1544,7 +1544,7 @@ def test_align_cues_enforces_monotonicity_when_dtw_maps_multiple_targets_to_same
 
     mock_model = mocker.MagicMock()
     mock_model.encode.side_effect = fake_encode
-    mocker.patch("subs_down_n_sync.audio_sync.SentenceTransformer", return_value=mock_model)
+    mocker.patch("subs_down_n_sync.audio_sync._get_sentence_model", return_value=mock_model)
 
     result = _align_cues_by_semantics(target_cues, ref_cues)
 

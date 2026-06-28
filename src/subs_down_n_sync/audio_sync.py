@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 import tempfile
 from collections import defaultdict
@@ -9,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+from faster_whisper import WhisperModel
 from scipy.spatial.distance import cdist
 from sentence_transformers import SentenceTransformer
 
@@ -26,6 +28,30 @@ SYNC_THRESHOLD_SECONDS = 0.2
 _LINEAR_STD_THRESHOLD = 2.0
 _SEMANTIC_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 
+logging.getLogger("faster_whisper").setLevel(logging.WARNING)
+logging.getLogger("ctranslate2").setLevel(logging.WARNING)
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+
+_sentence_model_cache: SentenceTransformer | None = None
+_whisper_model_cache: tuple[str, WhisperModel] | None = None
+
+
+def _get_sentence_model() -> SentenceTransformer:
+    global _sentence_model_cache
+    if _sentence_model_cache is None:
+        _sentence_model_cache = SentenceTransformer(_SEMANTIC_MODEL)
+    return _sentence_model_cache
+
+
+def _get_whisper_model(model_size: str) -> WhisperModel:
+    global _whisper_model_cache
+    if _whisper_model_cache is None or _whisper_model_cache[0] != model_size:
+        _whisper_model_cache = (
+            model_size,
+            WhisperModel(model_size, device="cpu", compute_type="int8"),
+        )
+    return _whisper_model_cache[1]
+
 
 @dataclass(frozen=True)
 class SyncResult:
@@ -39,7 +65,7 @@ def _align_cues_by_semantics(
     ref_cues: list[dict],
 ) -> list[dict]:
     """Alinha cues de legenda alvo aos timestamps da referência via embeddings semânticos + DTW."""
-    model = SentenceTransformer(_SEMANTIC_MODEL)
+    model = _get_sentence_model()
 
     target_emb = model.encode([c["text"] for c in target_cues], convert_to_numpy=True)
     ref_emb = model.encode([c["text"] for c in ref_cues], convert_to_numpy=True)
@@ -182,9 +208,7 @@ def _extract_audio(video_path: Path, output_wav: Path, duration_s: int = 600) ->
 
 def _transcribe(wav_path: Path, model_size: str) -> list[dict]:
     """Transcreve áudio usando faster-whisper. Retorna lista de segmentos."""
-    from faster_whisper import WhisperModel
-
-    model = WhisperModel(model_size, device="cpu", compute_type="int8")
+    model = _get_whisper_model(model_size)
     segments, _ = model.transcribe(str(wav_path))
     return [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segments]
 
