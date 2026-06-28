@@ -7,7 +7,7 @@
 
 Python CLI for downloading and synchronizing subtitles for video files. Default language: **pt-BR**, configurable via `--lang` flag (any BCP 47 tag).
 
-Synchronization uses multilingual semantic embeddings ([sentence-transformers](https://www.sbert.net/), model `paraphrase-multilingual-MiniLM-L12-v2`) combined with DTW: downloads an EN reference subtitle and aligns target cues to the reference timestamps via semantic similarity. Subtitles with an exact match (hash or release group) are used without synchronization.
+Synchronization uses multilingual semantic embeddings ([sentence-transformers](https://www.sbert.net/), model `paraphrase-multilingual-MiniLM-L12-v2`) combined with DTW: downloads a reference subtitle in the original language (default: EN, configurable via `--ref-lang`) and aligns target cues to the reference timestamps via semantic similarity. Subtitles with an exact match (hash or release group) are used without synchronization.
 
 ## Installation
 
@@ -149,6 +149,9 @@ subs-down-n-sync /path/to/folder/ --parallel    # process up to 2 videos in para
 
 # Audio sync with a larger Whisper model (more accurate, slower)
 subs-down-n-sync /path/to/movie.mkv --whisper-model base
+
+# Non-English original language (e.g. Spanish content)
+subs-down-n-sync /path/to/movie.mkv --ref-lang es
 
 # Or via Python module
 python -m subs_down_n_sync /path/to/movie.mkv

@@ -7,7 +7,7 @@
 
 CLI Python para baixar e sincronizar legendas para arquivos de vídeo. Idioma padrão: **pt-BR**, configurável via flag `--lang` (qualquer tag BCP 47).
 
-A sincronização usa embeddings semânticos multilíngues ([sentence-transformers](https://www.sbert.net/), modelo `paraphrase-multilingual-MiniLM-L12-v2`) combinados com DTW: baixa uma legenda EN de referência e alinha os cues da legenda alvo aos timestamps da referência por similaridade semântica. Legendas com match exato (hash ou release group) são usadas sem sincronização.
+A sincronização usa embeddings semânticos multilíngues ([sentence-transformers](https://www.sbert.net/), modelo `paraphrase-multilingual-MiniLM-L12-v2`) combinados com DTW: baixa uma legenda de referência no idioma original (padrão: EN, configurável via `--ref-lang`) e alinha os cues da legenda alvo aos timestamps da referência por similaridade semântica. Legendas com match exato (hash ou release group) são usadas sem sincronização.
 
 ## Instalação
 
@@ -149,6 +149,9 @@ subs-down-n-sync /caminho/para/pasta/ --parallel    # processa até 2 vídeos si
 
 # Audio sync com modelo Whisper maior (mais preciso, mais lento)
 subs-down-n-sync /caminho/para/filme.mkv --whisper-model base
+
+# Idioma original diferente de EN (ex.: conteúdo espanhol)
+subs-down-n-sync /caminho/para/filme.mkv --ref-lang es
 
 # Ou via módulo Python
 python -m subs_down_n_sync /caminho/para/filme.mkv

@@ -130,28 +130,35 @@ def find_and_download_subtitle(
 def find_reference_subtitle(
     video_path: Path,
     credentials: tuple[str, str],
+    ref_lang: str = "en",
 ) -> Path | None:
-    """Baixa legenda EN como referência de alinhamento. Retorna path ou None."""
+    """Baixa legenda de referência para alinhamento. Retorna path ou None.
+
+    Só aceita matches até tier 3 — tier 4 indica baixa confiança e não serve como âncora.
+    """
     user, pwd = credentials
     video = subliminal.scan_video(str(video_path))
     hash_refine(video)
 
-    en = Language("eng")
+    lang = parse_language(ref_lang)
     provider_configs = {"opensubtitles": {"username": user, "password": pwd}}
 
     results = subliminal.list_subtitles(
         {video},
-        {en},
+        {lang},
         providers=["opensubtitles"],
         provider_configs=provider_configs,
     )
     candidates = results.get(video, [])
-    target_candidates = [s for s in candidates if getattr(s, "language", None) == en]
+    target_candidates = [s for s in candidates if getattr(s, "language", None) == lang]
 
     if not target_candidates:
         return None
 
-    subtitle, _ = pick_subtitle(target_candidates, video)
+    subtitle, info = pick_subtitle(target_candidates, video)
+
+    if info.match_tier == 4:
+        return None
 
     subliminal.download_subtitles([subtitle], provider_configs=provider_configs)
     if not subtitle.text:
@@ -182,6 +189,7 @@ def run(
     resync: bool = False,
     overwrite: bool = False,
     whisper_model: str = "tiny",
+    ref_lang: str = "en",
 ) -> RunSummary:
     def _notify(step: str, detail: str = "") -> None:
         if on_progress:
@@ -254,36 +262,23 @@ def run(
                 sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
                 _notify("erro_sync", str(e))
         else:
-            _notify("referencia", "buscando EN")
-            ref_path = find_reference_subtitle(video_path, credentials=credentials)
+            _notify("referencia", f"buscando {ref_lang}")
+            ref_path = find_reference_subtitle(
+                video_path, credentials=credentials, ref_lang=ref_lang
+            )
 
             if ref_path:
                 _notify("sincronizando", "embeddings semânticos")
                 try:
                     sync_result = sync_subtitle(srt_path, ref_path=ref_path)
                     _notify("sincronizado", f"offset={sync_result.offset_seconds:.2f}s")
-                except SubtitleSyncError:
-                    _notify("sem_referencia", "ref falhou — tentando audio sync")
-                    try:
-                        sync_result = sync_by_audio(
-                            srt_path, video_path, model_size=whisper_model, on_progress=on_progress
-                        )
-                        _notify("sincronizado", f"modo={sync_result.sync_mode}")
-                    except SubtitleSyncError as e2:
-                        sync_error = str(e2)
-                        sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
-                        _notify("erro_sync", str(e2))
-            else:
-                _notify("sem_referencia", "tentando audio sync")
-                try:
-                    sync_result = sync_by_audio(
-                        srt_path, video_path, model_size=whisper_model, on_progress=on_progress
-                    )
-                    _notify("sincronizado", f"modo={sync_result.sync_mode}")
                 except SubtitleSyncError as e:
                     sync_error = str(e)
                     sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
                     _notify("erro_sync", str(e))
+            else:
+                _notify("sem_referencia", "legenda usada sem sincronização")
+                sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
     else:
         sync_result = SyncResult(synced=False, offset_seconds=0.0, sync_mode="none")
         _notify("sem_sync", f"offset={sync_result.offset_seconds:.2f}s")

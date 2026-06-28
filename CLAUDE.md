@@ -78,6 +78,7 @@ subs-down-n-sync /caminho/para/pasta/ --overwrite   # sobrescreve legendas exist
 subs-down-n-sync /caminho/para/pasta/ --resync      # sincroniza legenda existente sem bater na API
 subs-down-n-sync /caminho/para/pasta/ --parallel    # processa até 2 vídeos simultâneos
 subs-down-n-sync /caminho/para/filme.mkv --whisper-model base  # modelo Whisper maior (mais preciso)
+subs-down-n-sync /caminho/para/filme.mkv --ref-lang es         # idioma original diferente de EN
 
 # Via módulo Python
 python -m subs_down_n_sync /caminho/para/filme.mkv
