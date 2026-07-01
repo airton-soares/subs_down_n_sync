@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-07-01)
+
+### Features
+
+- **cli**: Tornar --parallel dinâmico por qtd de CPUs
+  ([`031e376`](https://github.com/airton-soares/subs_down_n_sync/commit/031e3763d87b9d5d5fe6c6b3fdcb1a3faa2f1172))
+
+
 ## v1.4.1 (2026-06-28)
 
 ### Performance Improvements
