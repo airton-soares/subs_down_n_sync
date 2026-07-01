@@ -2025,12 +2025,12 @@ def test_build_parser_parallel_flag_defaults_to_false():
     assert args.parallel is False
 
 
-def test_build_parser_parallel_flag_sets_true():
+def test_build_parser_parallel_flag_sets_none():
     from subs_down_n_sync.cli import build_parser
 
     parser = build_parser()
     args = parser.parse_args(["/any/path", "--parallel"])
-    assert args.parallel is True
+    assert args.parallel is None
 
 
 def test_build_parser_parallel_short_flag():
@@ -2038,7 +2038,104 @@ def test_build_parser_parallel_short_flag():
 
     parser = build_parser()
     args = parser.parse_args(["/any/path", "-p"])
-    assert args.parallel is True
+    assert args.parallel is None
+
+
+def test_build_parser_parallel_without_number_gives_none():
+    from subs_down_n_sync.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["/any/path", "--parallel"])
+    assert args.parallel is None
+
+
+def test_build_parser_parallel_with_number():
+    from subs_down_n_sync.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["/any/path", "--parallel", "4"])
+    assert args.parallel == 4
+
+
+def test_main_parallel_without_number_uses_cpu_count_minus_one(tmp_path, mocker):
+    import os
+
+    from subs_down_n_sync.cli import main
+
+    v = tmp_path / "filme.mkv"
+    v.write_bytes(b"\x00")
+
+    mock_run_dir = mocker.patch(
+        "subs_down_n_sync.cli._run_directory",
+        return_value=([], [], []),
+    )
+
+    main([str(tmp_path), "--parallel"])
+
+    expected_workers = max(1, (os.cpu_count() or 1) - 1)
+    mock_run_dir.assert_called_once_with(
+        tmp_path,
+        lang_tag="pt-BR",
+        overwrite=False,
+        resync=False,
+        parallel=expected_workers,
+        whisper_model="tiny",
+        ref_lang="en",
+    )
+
+
+def test_main_parallel_with_number_uses_that_number(tmp_path, mocker):
+    import os
+
+    from subs_down_n_sync.cli import main
+
+    v = tmp_path / "filme.mkv"
+    v.write_bytes(b"\x00")
+
+    mock_run_dir = mocker.patch(
+        "subs_down_n_sync.cli._run_directory",
+        return_value=([], [], []),
+    )
+
+    main([str(tmp_path), "--parallel", "2"])
+
+    expected_workers = min(2, os.cpu_count() or 1)
+    mock_run_dir.assert_called_once_with(
+        tmp_path,
+        lang_tag="pt-BR",
+        overwrite=False,
+        resync=False,
+        parallel=expected_workers,
+        whisper_model="tiny",
+        ref_lang="en",
+    )
+
+
+def test_main_parallel_with_number_exceeding_cpu_count_clamps_to_cpu_count(tmp_path, mocker):
+    import os
+
+    from subs_down_n_sync.cli import main
+
+    v = tmp_path / "filme.mkv"
+    v.write_bytes(b"\x00")
+
+    mock_run_dir = mocker.patch(
+        "subs_down_n_sync.cli._run_directory",
+        return_value=([], [], []),
+    )
+
+    main([str(tmp_path), "--parallel", "999"])
+
+    expected_workers = os.cpu_count() or 1
+    mock_run_dir.assert_called_once_with(
+        tmp_path,
+        lang_tag="pt-BR",
+        overwrite=False,
+        resync=False,
+        parallel=expected_workers,
+        whisper_model="tiny",
+        ref_lang="en",
+    )
 
 
 def test_build_parser_ref_lang_defaults_to_en():
@@ -2082,6 +2179,8 @@ def test_main_passes_ref_lang_to_run_directory(tmp_path, mocker):
 
 
 def test_main_passes_parallel_flag_to_run_directory(tmp_path, mocker):
+    import os
+
     from subs_down_n_sync.cli import main
 
     v = tmp_path / "filme.mkv"
@@ -2094,12 +2193,13 @@ def test_main_passes_parallel_flag_to_run_directory(tmp_path, mocker):
 
     main([str(tmp_path), "--parallel"])
 
+    expected_workers = max(1, (os.cpu_count() or 1) - 1)
     mock_run_dir.assert_called_once_with(
         tmp_path,
         lang_tag="pt-BR",
         overwrite=False,
         resync=False,
-        parallel=True,
+        parallel=expected_workers,
         whisper_model="tiny",
         ref_lang="en",
     )
@@ -2131,7 +2231,7 @@ def test_run_directory_parallel_processes_all_videos(tmp_path, monkeypatch, mock
     mock_run = mocker.patch("subs_down_n_sync.cli.run", return_value=fake_summary)
 
     results, skipped, errors = _run_directory(
-        tmp_path, lang_tag="pt-BR", overwrite=False, parallel=True
+        tmp_path, lang_tag="pt-BR", overwrite=False, parallel=2
     )
 
     assert mock_run.call_count == 3
@@ -2171,7 +2271,7 @@ def test_run_directory_parallel_continues_after_error(tmp_path, monkeypatch, moc
     mocker.patch("subs_down_n_sync.cli.run", side_effect=side_effect)
 
     results, skipped, errors = _run_directory(
-        tmp_path, lang_tag="pt-BR", overwrite=False, parallel=True
+        tmp_path, lang_tag="pt-BR", overwrite=False, parallel=2
     )
 
     assert len(results) == 1

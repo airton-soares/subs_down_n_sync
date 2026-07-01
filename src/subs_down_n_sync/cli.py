@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -21,8 +22,6 @@ from rich.table import Table
 from subs_down_n_sync.core import DEFAULT_LANG, VIDEO_EXTENSIONS, RunSummary, run
 from subs_down_n_sync.credentials import load_credentials
 from subs_down_n_sync.exceptions import SubsDownError
-
-MAX_PARALLEL_WORKERS = 2
 
 console = Console()
 err_console = Console(stderr=True)
@@ -156,7 +155,7 @@ def _run_directory(
     lang_tag: str,
     overwrite: bool = False,
     resync: bool = False,
-    parallel: bool = False,
+    parallel: int = 0,
     whisper_model: str = "tiny",
     ref_lang: str = "en",
 ) -> tuple[list[RunSummary], list[Path], list[tuple[Path, str]]]:
@@ -188,7 +187,7 @@ def _run_directory(
 
     with progress:
         if parallel:
-            with ThreadPoolExecutor(max_workers=MAX_PARALLEL_WORKERS) as pool:
+            with ThreadPoolExecutor(max_workers=parallel) as pool:
                 effective_resync = False if overwrite else resync
                 futures = {
                     pool.submit(
@@ -319,11 +318,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-p",
         "--parallel",
-        action="store_true",
+        nargs="?",
+        type=int,
+        const=None,
         default=False,
+        metavar="N",
         help=(
-            f"Processar vídeos em paralelo (até {MAX_PARALLEL_WORKERS} simultâneos) "
-            "quando o caminho for um diretório."
+            "Processar vídeos em paralelo quando o caminho for um diretório. "
+            "Sem N: usa cpu_count-1 workers. Com N: usa min(N, cpu_count) workers."
         ),
     )
     parser.add_argument(
@@ -351,6 +353,14 @@ def main(argv: list[str] | None = None) -> int:
 
     whisper_model = args.whisper_model
     ref_lang = args.ref_lang
+    cpu_count = os.cpu_count() or 1
+    raw_parallel = args.parallel
+    if raw_parallel is False:
+        parallel_workers = 0
+    elif raw_parallel is None:
+        parallel_workers = max(1, cpu_count - 1)
+    else:
+        parallel_workers = min(raw_parallel, cpu_count)
 
     if p.is_dir():
         results, skipped, errors = _run_directory(
@@ -358,7 +368,7 @@ def main(argv: list[str] | None = None) -> int:
             lang_tag=args.lang,
             overwrite=args.overwrite,
             resync=args.resync,
-            parallel=args.parallel,
+            parallel=parallel_workers,
             whisper_model=whisper_model,
             ref_lang=ref_lang,
         )
